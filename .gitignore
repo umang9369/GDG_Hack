@@ -1,4 +1,4 @@
-.node_modules/
+node_modules/
 .DS_Store
 *.log
 npm-debug.log*
@@ -27,4 +27,4 @@ Thumbs.db
 # Project
 .cache/
 .next/
-"backend/.env" 
+backend/.env
