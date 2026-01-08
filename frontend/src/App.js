@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import TeacherValidator from './components/TeacherValidator';
+import VideoDemo from './components/VideoDemo';
 import './App.css';
 
 function App() {
   const [validation, setValidation] = useState(null);
 
-  const topicText = "A quadratic equation is a second-degree polynomial equation of the form ax squared plus bx plus c equals zero, where a is not equal to zero. It can be solved using the quadratic formula x equals negative b plus or minus square root of b squared minus 4ac over 2a.";
+  const topicText = "A quadratic equation is a second-degree polynomial equation of the form ax squared plus bx plus c equals zero, where a is not equal to zero. It can be solved using the quadrati[...]"
 
   const handleResult = (isCorrect, score) => {
     setValidation({ isCorrect, score });
@@ -26,6 +27,9 @@ function App() {
           Similarity Score: {(validation.score * 100).toFixed(0)}%
         </div>
       )}
+
+      {/* Mount the Video / Roboflow demo */}
+      <VideoDemo />
     </div>
   );
 }

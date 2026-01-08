@@ -27,3 +27,4 @@ Thumbs.db
 # Project
 .cache/
 .next/
+"backend/.env" 
