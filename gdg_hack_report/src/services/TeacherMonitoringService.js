@@ -382,8 +382,9 @@ class TeacherMonitoringService {
     if (hasExample) { this.exampleCount++; this.teachingMetrics.exampleUsage = Math.min(100, this.teachingMetrics.exampleUsage + 4); this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 2); }
     if (hasClarity) { this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 2); }
     
-    const segmentScore = words.length > 0 ? (matchCount / Math.max(words.length * 0.25, 1)) * 100 : 0;
-    const isOnTopic = segmentScore >= 25 || matchCount >= 2;
+    // More lenient scoring - even 1 keyword match in a short segment is considered on-topic
+    const segmentScore = words.length > 0 ? Math.min(100, (matchCount / Math.max(words.length * 0.15, 1)) * 100) : 0;
+    const isOnTopic = segmentScore >= 15 || matchCount >= 1 || words.length <= 3;
     
     const segmentAnalysis = { text, timestamp: new Date().toISOString(), score: Math.min(segmentScore, 100), isOnTopic, matchedKeywords, wordCount: words.length, hasQuestion, hasExample, hasClarity };
     
@@ -458,17 +459,31 @@ class TeacherMonitoringService {
   }
 
   calculateGrade(analysis) {
-    const topicScore = analysis.onTopicPercentage * 0.4;
-    const metricsAvg = Object.values(analysis.teachingMetrics).reduce((a, b) => a + b, 0) / 5 * 0.4;
-    const engagementBonus = (analysis.questionsAsked * 2 + analysis.examplesGiven * 3) * 0.2;
-    const finalScore = Math.min(100, topicScore + metricsAvg + engagementBonus);
-    if (finalScore >= 90) return 'A+';
-    if (finalScore >= 85) return 'A';
-    if (finalScore >= 80) return 'B+';
-    if (finalScore >= 75) return 'B';
-    if (finalScore >= 70) return 'C+';
-    if (finalScore >= 65) return 'C';
-    if (finalScore >= 60) return 'D';
+    // More balanced grading formula
+    // Topic relevance: 35% weight
+    const topicScore = (analysis.onTopicPercentage / 100) * 35;
+    
+    // Teaching metrics average: 35% weight  
+    const metricsAvg = (Object.values(analysis.teachingMetrics).reduce((a, b) => a + b, 0) / 5 / 100) * 35;
+    
+    // Engagement factors: 20% weight (questions and examples)
+    const questionScore = Math.min(10, analysis.questionsAsked * 2);
+    const exampleScore = Math.min(10, analysis.examplesGiven * 3);
+    const engagementScore = questionScore + exampleScore;
+    
+    // Duration bonus: 10% weight (reward for longer sessions)
+    const durationBonus = Math.min(10, (analysis.totalDuration || 1) * 0.5);
+    
+    const finalScore = topicScore + metricsAvg + engagementScore + durationBonus;
+    
+    // Adjusted grade thresholds for fairer grading
+    if (finalScore >= 80) return 'A+';
+    if (finalScore >= 70) return 'A';
+    if (finalScore >= 60) return 'B+';
+    if (finalScore >= 50) return 'B';
+    if (finalScore >= 40) return 'C+';
+    if (finalScore >= 30) return 'C';
+    if (finalScore >= 20) return 'D';
     return 'F';
   }
 
@@ -503,20 +518,23 @@ class TeacherMonitoringService {
 
   startSimulation() {
     const topicKeywords = this.getTopicKeywords();
+    const kw = (i) => topicKeywords[i] || topicKeywords[0] || 'concept';
     const simulatedPhrases = [
-      `Today we'll learn about ${this.currentTopic}`,
-      `Let me explain the concept of ${topicKeywords[0] || 'this topic'}`,
-      `For example, when we have a ${topicKeywords[1] || 'problem'}`,
-      `Can anyone tell me what happens when...`,
-      `This is very important because...`,
-      `Let's look at another example`,
-      `Does everyone understand so far?`,
-      `The key point here is the ${topicKeywords[2] || 'concept'}`,
-      `In other words, we can say that...`,
-      `Who can solve this problem?`,
-      `Remember, ${topicKeywords[0] || 'this'} is related to ${topicKeywords[3] || 'that'}`,
-      `Let me show you step by step`,
-      `Any questions before we move on?`
+      `Today we'll learn about ${this.currentTopic} and understand the ${kw(0)}`,
+      `Let me explain the concept of ${kw(0)} and ${kw(1)} in detail`,
+      `For example, when we have a ${kw(1)} we can solve it using ${kw(2)}`,
+      `Can anyone tell me what happens when we apply ${kw(0)}?`,
+      `This ${kw(0)} is very important because it relates to ${kw(3)}`,
+      `Let's look at another example of ${kw(1)} and ${kw(2)}`,
+      `Does everyone understand the ${kw(0)} so far?`,
+      `The key point here is the ${kw(2)} which connects to ${kw(0)}`,
+      `In other words, we can say that ${kw(0)} equals ${kw(1)}`,
+      `Who can solve this ${kw(0)} problem using ${kw(2)}?`,
+      `Remember, ${kw(0)} is related to ${kw(3)} and ${kw(1)}`,
+      `Let me show you ${kw(0)} step by step with ${kw(2)}`,
+      `Any questions about ${kw(1)} before we move on to ${kw(3)}?`,
+      `The ${kw(0)} formula helps us calculate ${kw(1)} efficiently`,
+      `Therefore, by understanding ${kw(0)} we master ${kw(2)}`
     ];
 
     this.simulationInterval = setInterval(() => {

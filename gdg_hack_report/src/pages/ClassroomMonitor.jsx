@@ -3,13 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Video, Camera, Mic, MicOff, Users, 
   AlertTriangle, TrendingUp, BookOpen, Eye, Hand, Brain, Activity,
-  Plus, X, CheckCircle, Star, MessageCircle, Clock, Target
+  Plus, X, CheckCircle, Star, MessageCircle, Clock, Target, User
 } from 'lucide-react';
 import { teacherMonitoringService } from '../services/TeacherMonitoringService';
 import { studentAttentivenessService } from '../services/StudentAttentivenessService';
 import { attendanceService } from '../services/AttendanceService';
+import { teacherSessionService } from '../services/TeacherSessionService';
 import LiveFaceCamera from '../components/LiveFaceCamera';
 import { faceDatabase } from '../services/FaceDatabase';
+import { useAuth } from '../context/AuthContext';
+import { demoUsers } from '../utils/mockData';
+
+// Get list of teachers from demo users
+const availableTeachers = demoUsers.filter(u => u.role === 'teacher');
 
 // Mock student data for demo
 const mockStudents = [
@@ -177,7 +183,7 @@ const LegacyAttendancePanel = ({ onAttendanceUpdate }) => {
 };
 
 // Teacher Monitoring Panel Component with Enhanced Analysis
-const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate }) => {
+const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo }) => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [analysis, setAnalysis] = useState(null);
@@ -197,14 +203,30 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate }) => {
     const finalReport = teacherMonitoringService.stopMonitoring();
     setReport(finalReport);
     setIsMonitoring(false);
+    
+    // Save session to teacher's history
+    if (teacherInfo && finalReport) {
+      const savedSession = teacherSessionService.saveSession(finalReport, teacherInfo);
+      console.log('Session saved:', savedSession);
+    }
+    
     if (onReportUpdate) onReportUpdate(finalReport);
   };
 
   const getStatusColor = (status) => {
     if (status === 'Excellent' || status === 'Exemplary') return 'text-green-600 bg-green-100';
     if (status === 'Good') return 'text-blue-600 bg-blue-100';
-    if (status === 'Needs Improvement') return 'text-yellow-600 bg-yellow-100';
+    if (status === 'Satisfactory') return 'text-yellow-600 bg-yellow-100';
+    if (status === 'Needs Improvement') return 'text-orange-600 bg-orange-100';
     return 'text-red-600 bg-red-100';
+  };
+
+  const getGradeColor = (grade) => {
+    if (grade === 'A+' || grade === 'A') return 'text-green-600';
+    if (grade === 'B+' || grade === 'B') return 'text-blue-600';
+    if (grade === 'C+' || grade === 'C') return 'text-yellow-600';
+    if (grade === 'D') return 'text-orange-600';
+    return 'text-red-600';
   };
 
   return (
@@ -216,6 +238,17 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate }) => {
         </h3>
         <span className="text-sm text-gray-500">Works Offline</span>
       </div>
+      
+      {/* Show current teacher */}
+      {teacherInfo && (
+        <div className="bg-indigo-50 p-3 rounded-lg mb-3 flex items-center gap-2">
+          <User className="w-5 h-5 text-indigo-600" />
+          <div>
+            <p className="text-sm text-indigo-600 font-medium">Teaching:</p>
+            <p className="text-indigo-900 font-semibold">{teacherInfo.name}</p>
+          </div>
+        </div>
+      )}
       
       <div className="bg-purple-50 p-3 rounded-lg mb-4">
         <p className="text-sm text-purple-600 font-medium">Expected Topic:</p>
@@ -295,9 +328,13 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate }) => {
       {report && !isMonitoring && (
         <div className="mt-4 bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
           <h4 className="font-bold text-lg mb-2">Session Report</h4>
-          <p><strong>Grade:</strong> <span className="text-2xl font-bold text-purple-600">{report.grade}</span></p>
-          <p><strong>Status:</strong> {report.status}</p>
+          {teacherInfo && (
+            <p className="text-sm text-gray-600 mb-2">Teacher: <span className="font-semibold">{teacherInfo.name}</span></p>
+          )}
+          <p><strong>Grade:</strong> <span className={`text-2xl font-bold ${getGradeColor(report.grade)}`}>{report.grade}</span></p>
+          <p><strong>Status:</strong> <span className={`px-2 py-1 rounded text-sm ${getStatusColor(report.status)}`}>{report.status}</span></p>
           <p><strong>Duration:</strong> {report.totalDuration} minutes</p>
+          <p><strong>On-Topic:</strong> {report.onTopicPercentage}%</p>
           
           {/* Strengths */}
           {report.strengths?.length > 0 && (
@@ -520,8 +557,17 @@ const StudentAttentivenessPanel = ({ students, onStatusUpdate }) => {
 // Main Classroom Monitor Component
 export const ClassroomMonitor = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [selectedTopic, setSelectedTopic] = useState('Quadratic Equations');
   const [selectedSubject, setSelectedSubject] = useState('Mathematics');
+  const [selectedTeacher, setSelectedTeacher] = useState(() => {
+    // Auto-select logged in teacher or first available
+    if (user?.role === 'teacher') {
+      const loggedInTeacher = availableTeachers.find(t => t.name === user.name);
+      return loggedInTeacher || availableTeachers[0];
+    }
+    return availableTeachers[0];
+  });
   const [attendanceData, setAttendanceData] = useState([]);
   const [teacherReport, setTeacherReport] = useState(null);
   const [studentStatus, setStudentStatus] = useState(null);
@@ -595,6 +641,24 @@ export const ClassroomMonitor = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
           <div className="flex flex-wrap items-center gap-4">
+            {/* Teacher Selector */}
+            <div className="flex-1 min-w-48">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <User className="w-4 h-4 inline mr-1" />Teacher
+              </label>
+              <select 
+                value={selectedTeacher?.id || ''} 
+                onChange={(e) => {
+                  const teacher = availableTeachers.find(t => t.id === e.target.value);
+                  setSelectedTeacher(teacher);
+                }}
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 bg-indigo-50"
+              >
+                {availableTeachers.map(teacher => (
+                  <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex-1 min-w-48">
               <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
               <select value={selectedSubject} onChange={(e) => { setSelectedSubject(e.target.value); setSelectedTopic(topics[e.target.value]?.[0] || ''); }}
@@ -657,7 +721,12 @@ export const ClassroomMonitor = () => {
 
         <div className="grid lg:grid-cols-3 gap-6">
           <AttendancePanel onAttendanceUpdate={setAttendanceData} />
-          <TeacherMonitoringPanel topic={selectedTopic} subject={selectedSubject} onReportUpdate={setTeacherReport} />
+          <TeacherMonitoringPanel 
+            topic={selectedTopic} 
+            subject={selectedSubject} 
+            onReportUpdate={setTeacherReport}
+            teacherInfo={selectedTeacher}
+          />
           <StudentAttentivenessPanel students={mockStudents} onStatusUpdate={setStudentStatus} />
         </div>
 
