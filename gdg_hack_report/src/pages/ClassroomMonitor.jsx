@@ -234,19 +234,21 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
   };
 
   // Handle manual text input for simulation/demo mode
-  const handleManualSubmit = (e) => {
+  const handleManualSubmit = async (e) => {
     e.preventDefault();
     if (!manualInput.trim() || !isMonitoring) return;
     
     // Manually analyze the input text
-    const analysis = teacherMonitoringService.analyzeSegment(manualInput);
+    const analysis = await teacherMonitoringService.analyzeSegment(manualInput);
     setTranscript(prev => prev + manualInput + '. ');
-    setLiveStatus({
-      status: analysis.isOnTopic ? 'on-topic' : 'off-topic',
-      text: manualInput,
-      matchedKeywords: analysis.matchedKeywords || [],
-      reason: analysis.reason || ''
-    });
+    if (analysis) {
+      setLiveStatus({
+        status: analysis.isOnTopic ? 'on-topic' : 'off-topic',
+        text: manualInput,
+        matchedKeywords: analysis.matchedKeywords || [],
+        reason: analysis.reason || ''
+      });
+    }
     setManualInput('');
   };
   const stopMonitoring = () => {
@@ -498,6 +500,28 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
                 <span className="flex items-center"><Target className="w-3 h-3 mr-1" />Examples: {analysis.examplesGiven || 0}</span>
                 <span className="flex items-center"><Clock className="w-3 h-3 mr-1" />{analysis.wordsPerMinute || 0} WPM</span>
               </div>
+            </div>
+          )}
+          
+          {/* LIVE Strengths */}
+          {analysis.strengths?.length > 0 && (
+            <div className="bg-green-50 p-3 rounded-lg">
+              <h5 className="font-semibold text-green-700 flex items-center text-sm">
+                <CheckCircle className="w-4 h-4 mr-1" />Strengths
+              </h5>
+              <ul className="list-disc list-inside text-xs text-green-600 mt-1">
+                {analysis.strengths.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
+            </div>
+          )}
+          
+          {/* LIVE Areas for Improvement */}
+          {analysis.improvements?.length > 0 && (
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <h5 className="font-semibold text-yellow-700 text-sm">Areas for Improvement</h5>
+              <ul className="list-disc list-inside text-xs text-yellow-600 mt-1">
+                {analysis.improvements.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
             </div>
           )}
         </div>

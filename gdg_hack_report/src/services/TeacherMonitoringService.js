@@ -227,19 +227,21 @@ class TeacherMonitoringService {
         
         if (result.isFinal) {
           finalTranscript += transcript + ' ';
-          // Analyze final transcript
-          const analysis = this.analyzeSegment(transcript);
-          
-          // Update live status with reason
-          if (this.onLiveStatus) {
-            this.onLiveStatus({
-              status: analysis.isOnTopic ? 'on-topic' : 'off-topic',
-              text: transcript,
-              matchedKeywords: analysis.matchedKeywords || [],
-              reason: analysis.reason || (analysis.isOnTopic ? 'Topic keywords detected' : 'No topic keywords found'),
-              confidence: result[0].confidence || 0.9
-            });
-          }
+          // Analyze final transcript (async but don't block)
+          this.analyzeSegment(transcript).then(analysis => {
+            if (analysis) {
+              // Update live status with reason
+              if (this.onLiveStatus) {
+                this.onLiveStatus({
+                  status: analysis.isOnTopic ? 'on-topic' : 'off-topic',
+                  text: transcript,
+                  matchedKeywords: analysis.matchedKeywords || [],
+                  reason: analysis.reason || (analysis.isOnTopic ? 'Topic keywords detected' : 'No topic keywords found'),
+                  confidence: result[0].confidence || 0.9
+                });
+              }
+            }
+          }).catch(err => console.warn('Analysis error:', err));
         } else {
           interimTranscript += transcript;
         }
@@ -664,46 +666,138 @@ Respond with JSON only (no markdown):
     }
   }
 
-  // Quick local analysis - FALLBACK only when AI fails
+  // Quick local analysis - ROBUST FALLBACK when AI fails
   quickLocalAnalysis(text) {
     const textLower = text.toLowerCase();
     const words = textLower.split(/\s+/).map(w => w.replace(/[^\w]/g, ''));
     
-    // Basic topic word check
-    const topicWords = this.currentTopic.toLowerCase().split(/\s+/);
+    // Get comprehensive keywords for the topic
+    const topicKeywords = this.getTopicKeywordsComprehensive();
+    
     let matchCount = 0;
     const matchedKeywords = [];
     
-    topicWords.forEach(word => {
-      if (word.length > 2 && textLower.includes(word)) {
-        matchCount++;
-        matchedKeywords.push(word);
+    // Check all topic keywords
+    topicKeywords.forEach(keyword => {
+      if (keyword.includes(' ')) {
+        // Multi-word phrase
+        if (textLower.includes(keyword)) {
+          matchCount += 2;
+          matchedKeywords.push(keyword);
+        }
+      } else {
+        // Single word - check if it appears
+        if (textLower.includes(keyword) || words.includes(keyword)) {
+          matchCount++;
+          matchedKeywords.push(keyword);
+        }
       }
     });
     
     // Check for common teaching patterns
     const teachingPatterns = ['let me', 'we can', 'you see', 'this means', 'for example', 
-      'remember', 'notice', 'look at', 'think about', 'consider', 'when we', 'if we'];
+      'remember', 'notice', 'look at', 'think about', 'consider', 'when we', 'if we',
+      'so basically', 'let us', "let's", 'okay so', 'now we', 'what is', 'what are'];
     const hasTeachingPattern = teachingPatterns.some(p => textLower.includes(p));
     
-    // Be lenient - assume on-topic unless clearly off-topic
-    const offTopicIndicators = ['weather', 'lunch', 'movie', 'game', 'cricket', 
-      'football', 'music', 'party', 'weekend', 'holiday'];
+    // Only these are truly off-topic
+    const offTopicIndicators = ['weather today', 'what did you eat', 'movie last night', 
+      'cricket match', 'football game', 'party yesterday', 'weekend plans'];
     const hasOffTopic = offTopicIndicators.some(w => textLower.includes(w));
     
-    const isOnTopic = !hasOffTopic && (matchCount > 0 || hasTeachingPattern || words.length < 5);
+    // ON-TOPIC if: has keyword matches OR teaching pattern OR short segment (transitional)
+    const isOnTopic = !hasOffTopic && (matchCount >= 1 || hasTeachingPattern);
+    
+    let reason = '';
+    if (matchCount >= 1) {
+      reason = `Topic keywords: ${matchedKeywords.slice(0, 4).join(', ')}`;
+    } else if (hasTeachingPattern) {
+      reason = 'Teaching pattern detected';
+    } else if (hasOffTopic) {
+      reason = 'Off-topic conversation';
+    } else {
+      reason = 'Analyzing context...';
+    }
     
     return {
       isOnTopic,
-      confidence: matchCount > 0 ? 0.7 : 0.5,
+      confidence: Math.min(1, matchCount * 0.2 + 0.3),
       matchedKeywords,
-      reason: isOnTopic 
-        ? (matchCount > 0 ? `Contains: ${matchedKeywords.join(', ')}` : 'Teaching context detected')
-        : 'Off-topic content detected'
+      reason
     };
   }
+  
+  // Get comprehensive keywords for the current topic
+  getTopicKeywordsComprehensive() {
+    const topicLower = this.currentTopic.toLowerCase();
+    
+    // Comprehensive keyword database
+    const keywordDB = {
+      // Programming / Arrays / Data Structures
+      'programming': ['array', 'arrays', 'variable', 'variables', 'function', 'functions', 
+        'code', 'coding', 'program', 'loop', 'loops', 'data', 'data structure', 'data structures',
+        'integer', 'int', 'string', 'character', 'characters', 'store', 'storing', 'stored',
+        'index', 'element', 'elements', 'value', 'values', 'type', 'types', 'data type',
+        'if', 'else', 'while', 'for', 'condition', 'conditional', 'input', 'output', 'print',
+        'algorithm', 'logic', 'execute', 'run', 'compile', 'syntax', 'statement', 'declare',
+        'initialize', 'assign', 'operator', 'module', 'class', 'object', 'method', 'return',
+        'parameter', 'argument', 'boolean', 'true', 'false', 'null', 'undefined', 'length',
+        'size', 'memory', 'stack', 'queue', 'list', 'linked list', 'pointer', 'reference'],
+      'array': ['array', 'arrays', 'element', 'elements', 'index', 'indices', 'store', 'storing',
+        'data structure', 'integer', 'character', 'string', 'length', 'size', 'access',
+        'traverse', 'loop', 'for loop', 'while loop', 'first element', 'last element',
+        'insert', 'delete', 'search', 'sort', 'initialize', 'declare', 'memory', 'contiguous'],
+      
+      // Mathematics
+      'quadratic': ['quadratic', 'equation', 'squared', 'square', 'parabola', 'vertex', 
+        'roots', 'discriminant', 'formula', 'coefficient', 'factorization', 'solve',
+        'ax squared', 'bx', 'plus or minus', 'graph', 'curve', 'solution', 'solutions'],
+      'linear': ['linear', 'slope', 'intercept', 'gradient', 'line', 'straight', 'graph',
+        'coordinate', 'equation', 'y equals', 'mx plus b', 'x intercept', 'y intercept'],
+      'trigonometry': ['sine', 'cosine', 'tangent', 'sin', 'cos', 'tan', 'angle', 'theta',
+        'hypotenuse', 'opposite', 'adjacent', 'triangle', 'degree', 'radian', 'ratio'],
+      'algebra': ['variable', 'expression', 'equation', 'polynomial', 'factor', 'simplify',
+        'solve', 'coefficient', 'term', 'exponent', 'power', 'algebraic'],
+      'geometry': ['angle', 'triangle', 'circle', 'area', 'perimeter', 'volume', 'radius',
+        'diameter', 'vertex', 'edge', 'face', 'parallel', 'perpendicular', 'congruent'],
+      'calculus': ['derivative', 'integral', 'limit', 'differentiate', 'integrate', 'slope',
+        'rate of change', 'function', 'continuous', 'maximum', 'minimum'],
+      'statistics': ['mean', 'median', 'mode', 'average', 'variance', 'probability', 
+        'data', 'frequency', 'distribution', 'sample', 'population'],
+      
+      // Science
+      'photosynthesis': ['photosynthesis', 'chlorophyll', 'sunlight', 'carbon dioxide', 'oxygen',
+        'glucose', 'plant', 'leaf', 'leaves', 'chloroplast', 'energy', 'light'],
+      'physics': ['force', 'mass', 'acceleration', 'velocity', 'speed', 'motion', 'energy',
+        'newton', 'gravity', 'momentum', 'friction', 'wave', 'frequency'],
+      'chemistry': ['atom', 'molecule', 'element', 'compound', 'reaction', 'chemical',
+        'electron', 'proton', 'neutron', 'bond', 'acid', 'base', 'ph'],
+      'biology': ['cell', 'organism', 'dna', 'gene', 'tissue', 'organ', 'system',
+        'evolution', 'species', 'ecosystem', 'protein', 'chromosome']
+    };
+    
+    // Find matching keyword set
+    let keywords = [];
+    for (const [topic, words] of Object.entries(keywordDB)) {
+      if (topicLower.includes(topic) || topic.includes(topicLower.split(' ')[0])) {
+        keywords = [...keywords, ...words];
+      }
+    }
+    
+    // Always add topic words themselves
+    const topicWords = topicLower.split(/\s+/).filter(w => w.length > 2);
+    keywords = [...keywords, ...topicWords];
+    
+    // If no specific match, add common teaching/academic words
+    if (keywords.length < 5) {
+      keywords = [...keywords, 'example', 'understand', 'concept', 'explain', 'learn',
+        'study', 'practice', 'problem', 'solution', 'answer', 'question'];
+    }
+    
+    return [...new Set(keywords)]; // Remove duplicates
+  }
 
-  // STRICT local analysis - KEPT for backwards compatibility but simplified
+  // STRICT local analysis - uses comprehensive keywords
   strictLocalAnalysis(text) {
     return this.quickLocalAnalysis(text);
   }
@@ -832,8 +926,57 @@ Respond with JSON only (no markdown):
       wordsPerMinute,
       totalWords: this.wordCount,
       segmentCount: totalSegments,
-      recentKeywords: this.sessionData.slice(-5).flatMap(s => s.matchedKeywords).filter((v, i, a) => a.indexOf(v) === i)
+      recentKeywords: this.sessionData.slice(-5).flatMap(s => s.matchedKeywords).filter((v, i, a) => a.indexOf(v) === i),
+      // LIVE strengths and improvements
+      strengths: this.identifyStrengthsLive(finalOnTopicPercent),
+      improvements: this.identifyImprovementsLive(finalOnTopicPercent)
     };
+  }
+  
+  // LIVE strengths - updates in real-time
+  identifyStrengthsLive(onTopicPercent) {
+    const strengths = [];
+    
+    if (onTopicPercent >= 60) {
+      strengths.push('Good focus on the lesson topic');
+    }
+    if (this.questionCount >= 1) {
+      strengths.push('Engaging students through questions');
+    }
+    if (this.exampleCount >= 1) {
+      strengths.push('Effective use of examples');
+    }
+    if (this.teachingMetrics.clarity >= 70) {
+      strengths.push('Clear explanations');
+    }
+    if (this.teachingMetrics.pacing >= 70) {
+      strengths.push('Good teaching pace');
+    }
+    if (this.wordCount > 50) {
+      strengths.push('Active engagement');
+    }
+    
+    return strengths.length > 0 ? strengths : ['Session in progress...'];
+  }
+  
+  // LIVE improvements - updates in real-time
+  identifyImprovementsLive(onTopicPercent) {
+    const improvements = [];
+    
+    if (onTopicPercent < 50) {
+      improvements.push('Stay more focused on the lesson topic');
+    }
+    if (this.questionCount < 1 && this.wordCount > 30) {
+      improvements.push('Ask more questions to check understanding');
+    }
+    if (this.exampleCount < 1 && this.wordCount > 50) {
+      improvements.push('Include more practical examples');
+    }
+    if (this.teachingMetrics.pacing < 60) {
+      improvements.push('Consider adjusting speaking pace');
+    }
+    
+    return improvements;
   }
 
   // Get status label
@@ -1008,7 +1151,7 @@ Respond with JSON only (no markdown):
       `The formula for ${kw(0)} is straightforward`
     ];
 
-    this.simulationInterval = setInterval(() => {
+    this.simulationInterval = setInterval(async () => {
       if (!this.isListening) {
         clearInterval(this.simulationInterval);
         return;
@@ -1017,17 +1160,18 @@ Respond with JSON only (no markdown):
       const phrase = simulatedPhrases[Math.floor(Math.random() * simulatedPhrases.length)];
       this.transcript += phrase + '. ';
       
-      const analysis = this.analyzeSegment(phrase);
+      const analysis = await this.analyzeSegment(phrase);
       
       if (this.onTranscriptUpdate) {
         this.onTranscriptUpdate(this.transcript, '');
       }
       
-      if (this.onLiveStatus) {
+      if (this.onLiveStatus && analysis) {
         this.onLiveStatus({
           status: analysis.isOnTopic ? 'on-topic' : 'off-topic',
           text: phrase,
-          matchedKeywords: analysis.matchedKeywords,
+          matchedKeywords: analysis.matchedKeywords || [],
+          reason: analysis.reason || '',
           confidence: 0.95
         });
       }
