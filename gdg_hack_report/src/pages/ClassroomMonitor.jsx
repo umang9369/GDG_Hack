@@ -318,25 +318,33 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
       {isMonitoring && (
         <div className="mt-4">
           {/* Real-time on/off topic indicator */}
-          <div className={`p-3 rounded-lg mb-3 flex items-center justify-between transition-all duration-300 ${
+          <div className={`p-3 rounded-lg mb-3 transition-all duration-300 ${
             liveStatus?.status === 'on-topic' ? 'bg-green-100 border-2 border-green-500' : 
             liveStatus?.status === 'off-topic' ? 'bg-red-100 border-2 border-red-500' : 
             'bg-gray-100 border-2 border-gray-300'
           }`}>
-            <div className="flex items-center gap-2">
-              <span className={`w-3 h-3 rounded-full animate-pulse ${
-                liveStatus?.status === 'on-topic' ? 'bg-green-500' : 
-                liveStatus?.status === 'off-topic' ? 'bg-red-500' : 'bg-gray-400'
-              }`}></span>
-              <span className="font-semibold">
-                {liveStatus?.status === 'on-topic' ? '✓ ON TOPIC' : 
-                 liveStatus?.status === 'off-topic' ? '✗ OFF TOPIC' : 'Listening...'}
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`w-3 h-3 rounded-full animate-pulse ${
+                  liveStatus?.status === 'on-topic' ? 'bg-green-500' : 
+                  liveStatus?.status === 'off-topic' ? 'bg-red-500' : 'bg-gray-400'
+                }`}></span>
+                <span className="font-semibold text-lg">
+                  {liveStatus?.status === 'on-topic' ? '✓ ON TOPIC' : 
+                   liveStatus?.status === 'off-topic' ? '✗ OFF TOPIC' : 'Listening...'}
+                </span>
+              </div>
+              {liveStatus?.matchedKeywords?.length > 0 && (
+                <span className="text-xs text-green-700 bg-green-200 px-2 py-1 rounded">
+                  Keywords: {liveStatus.matchedKeywords.slice(0, 3).join(', ')}
+                </span>
+              )}
             </div>
-            {liveStatus?.matchedKeywords?.length > 0 && (
-              <span className="text-xs text-green-700 bg-green-200 px-2 py-1 rounded">
-                Keywords: {liveStatus.matchedKeywords.slice(0, 3).join(', ')}
-              </span>
+            {/* Show reason for status */}
+            {liveStatus?.reason && (
+              <p className={`text-xs mt-1 ${liveStatus?.status === 'on-topic' ? 'text-green-600' : 'text-red-600'}`}>
+                {liveStatus.reason}
+              </p>
             )}
           </div>
 

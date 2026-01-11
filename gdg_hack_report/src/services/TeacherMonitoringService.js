@@ -1,5 +1,7 @@
 // Enhanced Teacher Monitoring Service - LIVE Speech Recognition
-// Real-time analysis with actual microphone capture
+// Real-time analysis with Gemini AI for accurate topic detection
+
+import { geminiAnalysisService } from './GeminiAnalysisService';
 
 class TeacherMonitoringService {
   constructor() {
@@ -23,6 +25,9 @@ class TeacherMonitoringService {
     this.lastSegmentTime = null;
     this.liveStatus = 'waiting'; // 'waiting', 'on-topic', 'off-topic'
     this.mode = 'waiting'; // 'live', 'simulation', 'waiting'
+    this.pendingAnalysis = null; // For async AI analysis
+    this.analysisBuffer = ''; // Buffer for batching analysis
+    this.lastAnalysisTime = 0;
     this.teachingMetrics = {
       clarity: 70,
       engagement: 70,
@@ -213,12 +218,13 @@ class TeacherMonitoringService {
           // Analyze final transcript
           const analysis = this.analyzeSegment(transcript);
           
-          // Update live status
+          // Update live status with reason
           if (this.onLiveStatus) {
             this.onLiveStatus({
               status: analysis.isOnTopic ? 'on-topic' : 'off-topic',
               text: transcript,
-              matchedKeywords: analysis.matchedKeywords,
+              matchedKeywords: analysis.matchedKeywords || [],
+              reason: analysis.reason || (analysis.isOnTopic ? 'Topic keywords detected' : 'No topic keywords found'),
               confidence: result[0].confidence || 0.9
             });
           }
@@ -366,7 +372,7 @@ class TeacherMonitoringService {
     return this.generateDetailedReport();
   }
 
-  // Analyze a speech segment - IMPROVED ALGORITHM
+  // Analyze a speech segment using Gemini AI - ACCURATE ANALYSIS
   analyzeSegment(text) {
     const now = new Date();
     const segmentDuration = this.lastSegmentTime ? (now - this.lastSegmentTime) / 1000 : 3;
@@ -377,35 +383,6 @@ class TeacherMonitoringService {
       .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
       .filter(w => w.length > 1);
-    
-    const topicKeywords = this.getTopicKeywords();
-    
-    // Count keyword matches with partial matching
-    let matchCount = 0;
-    const matchedKeywords = [];
-    
-    words.forEach(word => {
-      const isMatch = topicKeywords.some(kw => {
-        // Exact match
-        if (word === kw) return true;
-        // Word contains keyword (min 3 chars)
-        if (kw.length >= 3 && word.includes(kw)) return true;
-        // Keyword contains word (min 4 chars)
-        if (word.length >= 4 && kw.includes(word)) return true;
-        // Starts with same letters
-        if (word.length >= 4 && kw.length >= 4) {
-          if (word.substring(0, 4) === kw.substring(0, 4)) return true;
-        }
-        return false;
-      });
-      
-      if (isMatch) {
-        matchCount++;
-        if (!matchedKeywords.includes(word)) {
-          matchedKeywords.push(word);
-        }
-      }
-    });
     
     this.wordCount += words.length;
     
@@ -433,28 +410,22 @@ class TeacherMonitoringService {
     if (hasClarity) {
       this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 3);
     }
+
+    // Add to analysis buffer for batched AI analysis
+    this.analysisBuffer += ' ' + text;
     
-    // Calculate if on-topic - VERY LENIENT scoring
-    // Any keyword match or teaching indicator counts as on-topic
-    const hasKeywordMatch = matchCount >= 1;
-    const hasTeachingIndicator = hasQuestion || hasExample || hasClarity;
-    const isShortSegment = words.length <= 5;
+    // Use STRICT local analysis first for immediate feedback
+    const strictAnalysis = this.strictLocalAnalysis(text);
+    const isOnTopic = strictAnalysis.isOnTopic;
+    const matchedKeywords = strictAnalysis.matchedKeywords;
     
-    // A segment is on-topic if:
-    // 1. It has at least one keyword match, OR
-    // 2. It has a teaching indicator (question/example/clarity), OR
-    // 3. It's a short segment (likely transitional)
-    const isOnTopic = hasKeywordMatch || hasTeachingIndicator || isShortSegment;
+    // Calculate segment score based on strict analysis
+    let segmentScore = isOnTopic ? 70 + (strictAnalysis.confidence * 30) : 30;
+    segmentScore += hasQuestion ? 5 : 0;
+    segmentScore += hasExample ? 5 : 0;
+    segmentScore = Math.min(100, Math.max(0, segmentScore));
     
-    // Calculate segment score (0-100)
-    let segmentScore = 50; // Base score
-    segmentScore += matchCount * 15; // Each keyword match adds 15%
-    segmentScore += hasQuestion ? 10 : 0;
-    segmentScore += hasExample ? 10 : 0;
-    segmentScore += hasClarity ? 5 : 0;
-    segmentScore = Math.min(100, segmentScore);
-    
-    // Track time on/off topic (use segment duration)
+    // Track time on/off topic
     if (isOnTopic) {
       this.onTopicTime += segmentDuration;
     } else {
@@ -472,7 +443,8 @@ class TeacherMonitoringService {
       hasQuestion,
       hasExample,
       hasClarity,
-      duration: segmentDuration
+      duration: segmentDuration,
+      reason: strictAnalysis.reason
     };
     
     this.sessionData.push(segmentAnalysis);
@@ -487,12 +459,168 @@ class TeacherMonitoringService {
     // Update live status
     this.liveStatus = isOnTopic ? 'on-topic' : 'off-topic';
     
+    // Trigger Gemini AI analysis every 5 seconds for accuracy
+    const timeSinceLastAnalysis = now.getTime() - this.lastAnalysisTime;
+    if (timeSinceLastAnalysis > 5000 && this.analysisBuffer.trim().length > 30) {
+      this.runAIAnalysis();
+    }
+    
     // Trigger analysis update
     if (this.onAnalysisUpdate) {
       this.onAnalysisUpdate(this.getDetailedAnalysis());
     }
     
     return segmentAnalysis;
+  }
+
+  // STRICT local analysis - much more accurate
+  strictLocalAnalysis(text) {
+    const textLower = text.toLowerCase();
+    const words = textLower.split(/\s+/).map(w => w.replace(/[^\w]/g, ''));
+    
+    // Get strict keywords for the topic
+    const strictKeywords = this.getStrictTopicKeywords();
+    
+    let matchCount = 0;
+    const matchedKeywords = [];
+    
+    // Check for exact keyword matches only
+    strictKeywords.forEach(keyword => {
+      if (keyword.includes(' ')) {
+        // Multi-word phrase
+        if (textLower.includes(keyword)) {
+          matchCount += 2;
+          matchedKeywords.push(keyword);
+        }
+      } else {
+        // Single word - exact match only
+        if (words.includes(keyword)) {
+          matchCount++;
+          matchedKeywords.push(keyword);
+        }
+      }
+    });
+    
+    // Check for off-topic indicators
+    const offTopicPhrases = [
+      'good morning', 'good afternoon', 'good evening', 'hello everyone',
+      'how are you', 'did you eat', 'yesterday', 'tomorrow', 'weekend',
+      'movie', 'game', 'cricket', 'football', 'holiday', 'vacation',
+      'homework', 'assignment', 'marks', 'attendance', 'roll call'
+    ];
+    
+    const isOffTopic = offTopicPhrases.some(phrase => textLower.includes(phrase));
+    
+    // Short greetings/transitions are neutral
+    if (words.length <= 4) {
+      return {
+        isOnTopic: false, // Don't count short phrases
+        confidence: 0,
+        matchedKeywords: [],
+        reason: 'Too short to determine'
+      };
+    }
+    
+    // Need at least 2 keyword matches AND no off-topic content
+    const isOnTopic = matchCount >= 2 && !isOffTopic;
+    const confidence = Math.min(1, matchCount / 5);
+    
+    let reason = '';
+    if (isOnTopic) {
+      reason = `On topic: ${matchedKeywords.slice(0, 3).join(', ')}`;
+    } else if (isOffTopic) {
+      reason = 'Off-topic conversation detected';
+    } else if (matchCount === 0) {
+      reason = 'No topic keywords found';
+    } else {
+      reason = `Weak relevance (${matchCount} keywords)`;
+    }
+    
+    return { isOnTopic, confidence, matchedKeywords, reason };
+  }
+
+  // Get strict keywords for current topic
+  getStrictTopicKeywords() {
+    const topicKeywords = {
+      'quadratic equations': [
+        'quadratic', 'equation', 'squared', 'x squared', 'x square',
+        'ax squared', 'bx', 'polynomial', 'factorization', 'roots',
+        'discriminant', 'quadratic formula', 'parabola', 'vertex',
+        'coefficient', 'b squared', 'four ac', '4ac', 'minus b',
+        'completing the square', 'standard form', 'find x', 'solve for x',
+        'value of x', 'roots of equation', 'sum of roots', 'product of roots',
+        'nature of roots', 'real roots', 'imaginary roots', 'two solutions',
+        'plus or minus', 'square root', 'formula', 'factoring'
+      ],
+      'linear equations': [
+        'linear', 'straight line', 'slope', 'intercept', 'gradient',
+        'y equals mx', 'coordinate', 'parallel', 'perpendicular'
+      ],
+      'trigonometry': [
+        'sine', 'cosine', 'tangent', 'sin', 'cos', 'tan', 'theta',
+        'hypotenuse', 'opposite', 'adjacent', 'trigonometric', 'angle'
+      ],
+      'photosynthesis': [
+        'chlorophyll', 'sunlight', 'carbon dioxide', 'oxygen', 'glucose',
+        'chloroplast', 'stomata', 'plant', 'photosynthesis', 'leaves'
+      ]
+    };
+    
+    // Find matching keywords
+    const topicLower = this.currentTopic.toLowerCase();
+    for (const [topic, keywords] of Object.entries(topicKeywords)) {
+      if (topicLower.includes(topic) || topic.includes(topicLower)) {
+        return keywords;
+      }
+    }
+    
+    // Fallback - generate from topic name
+    return this.currentTopic.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  }
+
+  // Run Gemini AI analysis for better accuracy
+  async runAIAnalysis() {
+    if (!this.analysisBuffer.trim()) return;
+    
+    this.lastAnalysisTime = Date.now();
+    const textToAnalyze = this.analysisBuffer;
+    this.analysisBuffer = ''; // Clear buffer
+    
+    try {
+      const result = await geminiAnalysisService.analyzeTopicRelevance(
+        textToAnalyze,
+        this.currentTopic,
+        this.currentSubject
+      );
+      
+      console.log('🤖 Gemini AI Analysis:', result);
+      
+      // Update the last few segments based on AI analysis
+      if (result && !result.isOnTopic) {
+        // AI says off-topic - update recent segments
+        const recentSegments = this.sessionData.slice(-3);
+        recentSegments.forEach(seg => {
+          if (seg.isOnTopic && seg.matchedKeywords.length < 2) {
+            seg.isOnTopic = false;
+            seg.reason = result.reason || 'AI detected off-topic';
+            // Move from on-topic to off-topic
+            const idx = this.onTopicSegments.indexOf(seg);
+            if (idx > -1) {
+              this.onTopicSegments.splice(idx, 1);
+              this.offTopicSegments.push(seg);
+            }
+          }
+        });
+      }
+      
+      // Trigger update with AI-refined analysis
+      if (this.onAnalysisUpdate) {
+        this.onAnalysisUpdate(this.getDetailedAnalysis());
+      }
+    } catch (error) {
+      console.warn('AI analysis failed:', error);
+    }
+  }
   }
 
   // Get keywords for current topic
