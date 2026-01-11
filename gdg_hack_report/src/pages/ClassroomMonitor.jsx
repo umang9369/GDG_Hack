@@ -186,16 +186,45 @@ const LegacyAttendancePanel = ({ onAttendanceUpdate }) => {
 const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo }) => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [interimText, setInterimText] = useState('');
   const [analysis, setAnalysis] = useState(null);
   const [report, setReport] = useState(null);
+  const [liveStatus, setLiveStatus] = useState(null);
+  const [mode, setMode] = useState('waiting');
+  const [error, setError] = useState(null);
+  const transcriptRef = useRef(null);
 
   const startMonitoring = () => {
-    teacherMonitoringService.initSpeechRecognition();
-    teacherMonitoringService.startMonitoring(topic, subject, {
-      onTranscript: (fullTranscript) => setTranscript(fullTranscript),
-      onAnalysis: (analysisData) => setAnalysis(analysisData),
-      onError: (error) => console.error('Speech error:', error)
+    setError(null);
+    setReport(null);
+    setTranscript('');
+    setInterimText('');
+    setLiveStatus(null);
+    
+    const initResult = teacherMonitoringService.initSpeechRecognition();
+    const result = teacherMonitoringService.startMonitoring(topic, subject, {
+      onTranscript: (fullTranscript, interim) => {
+        setTranscript(fullTranscript);
+        setInterimText(interim || '');
+        // Auto-scroll transcript
+        if (transcriptRef.current) {
+          transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+        }
+      },
+      onAnalysis: (analysisData) => {
+        setAnalysis(analysisData);
+        setMode(analysisData.mode || 'live');
+      },
+      onLiveStatus: (status) => {
+        setLiveStatus(status);
+      },
+      onError: (err) => {
+        console.error('Speech error:', err);
+        setError(err);
+      }
     });
+    
+    setMode(result.mode);
     setIsMonitoring(true);
   };
 
@@ -203,6 +232,8 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
     const finalReport = teacherMonitoringService.stopMonitoring();
     setReport(finalReport);
     setIsMonitoring(false);
+    setLiveStatus(null);
+    setInterimText('');
     
     // Save session to teacher's history
     if (teacherInfo && finalReport) {
@@ -229,6 +260,18 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
     return 'text-red-600';
   };
 
+  const getLiveStatusColor = (status) => {
+    if (status === 'on-topic') return 'bg-green-500 text-white';
+    if (status === 'off-topic') return 'bg-red-500 text-white';
+    return 'bg-gray-400 text-white';
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
@@ -236,7 +279,9 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
           <Mic className="w-6 h-6 mr-2 text-purple-600" />
           Teacher Topic Monitoring
         </h3>
-        <span className="text-sm text-gray-500">Works Offline</span>
+        <span className={`text-sm px-2 py-1 rounded ${mode === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+          {mode === 'live' ? '🎤 Live' : mode === 'simulation' ? '🔄 Demo' : 'Works Offline'}
+        </span>
       </div>
       
       {/* Show current teacher */}
@@ -254,6 +299,13 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
         <p className="text-sm text-purple-600 font-medium">Expected Topic:</p>
         <p className="text-purple-900">{topic}</p>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-4 text-red-700 text-sm">
+          ⚠️ {error}
+        </div>
+      )}
       
       <button onClick={isMonitoring ? stopMonitoring : startMonitoring}
         className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-2
@@ -261,6 +313,62 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
         {isMonitoring ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
         <span>{isMonitoring ? 'Stop Monitoring' : 'Start Voice Monitoring'}</span>
       </button>
+
+      {/* Live Status Indicator */}
+      {isMonitoring && (
+        <div className="mt-4">
+          {/* Real-time on/off topic indicator */}
+          <div className={`p-3 rounded-lg mb-3 flex items-center justify-between transition-all duration-300 ${
+            liveStatus?.status === 'on-topic' ? 'bg-green-100 border-2 border-green-500' : 
+            liveStatus?.status === 'off-topic' ? 'bg-red-100 border-2 border-red-500' : 
+            'bg-gray-100 border-2 border-gray-300'
+          }`}>
+            <div className="flex items-center gap-2">
+              <span className={`w-3 h-3 rounded-full animate-pulse ${
+                liveStatus?.status === 'on-topic' ? 'bg-green-500' : 
+                liveStatus?.status === 'off-topic' ? 'bg-red-500' : 'bg-gray-400'
+              }`}></span>
+              <span className="font-semibold">
+                {liveStatus?.status === 'on-topic' ? '✓ ON TOPIC' : 
+                 liveStatus?.status === 'off-topic' ? '✗ OFF TOPIC' : 'Listening...'}
+              </span>
+            </div>
+            {liveStatus?.matchedKeywords?.length > 0 && (
+              <span className="text-xs text-green-700 bg-green-200 px-2 py-1 rounded">
+                Keywords: {liveStatus.matchedKeywords.slice(0, 3).join(', ')}
+              </span>
+            )}
+          </div>
+
+          {/* Live Subtitle Display */}
+          <div className="bg-gray-900 rounded-lg p-4 mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+              <span className="text-white text-xs font-medium">LIVE SUBTITLES</span>
+              {analysis && (
+                <span className="ml-auto text-gray-400 text-xs">
+                  Duration: {formatTime(analysis.totalDurationSeconds || 0)}
+                </span>
+              )}
+            </div>
+            <div 
+              ref={transcriptRef}
+              className="text-white text-lg min-h-[60px] max-h-[100px] overflow-y-auto"
+              style={{ fontFamily: 'system-ui' }}
+            >
+              {transcript && (
+                <span className="text-white">{transcript.split(' ').slice(-30).join(' ')}</span>
+              )}
+              {interimText && (
+                <span className="text-gray-400 italic"> {interimText}</span>
+              )}
+              {!transcript && !interimText && (
+                <span className="text-gray-500 italic">Speak into the microphone...</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       
       {analysis && isMonitoring && (
         <div className="mt-4 space-y-3">
@@ -271,9 +379,33 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
           <div className="bg-gray-100 rounded-full h-4 overflow-hidden">
             <div className="h-full bg-gradient-to-r from-green-500 to-green-600 transition-all duration-500" style={{ width: `${analysis.onTopicPercentage}%` }} />
           </div>
+          
+          {/* Time breakdown */}
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="bg-green-50 p-2 rounded"><span className="text-green-600">On-Topic:</span> {analysis.onTopicMinutes} min</div>
-            <div className="bg-red-50 p-2 rounded"><span className="text-red-600">Off-Topic:</span> {analysis.offTopicMinutes} min</div>
+            <div className="bg-green-50 p-2 rounded flex justify-between">
+              <span className="text-green-600">On-Topic:</span> 
+              <span className="font-semibold">{formatTime(analysis.onTopicSeconds || 0)}</span>
+            </div>
+            <div className="bg-red-50 p-2 rounded flex justify-between">
+              <span className="text-red-600">Off-Topic:</span> 
+              <span className="font-semibold">{formatTime(analysis.offTopicSeconds || 0)}</span>
+            </div>
+          </div>
+
+          {/* Live stats */}
+          <div className="bg-blue-50 p-2 rounded text-sm grid grid-cols-3 gap-2">
+            <div className="text-center">
+              <span className="text-blue-600 block">Words</span>
+              <span className="font-bold">{analysis.totalWords || 0}</span>
+            </div>
+            <div className="text-center">
+              <span className="text-blue-600 block">Questions</span>
+              <span className="font-bold">{analysis.questionsAsked || 0}</span>
+            </div>
+            <div className="text-center">
+              <span className="text-blue-600 block">Examples</span>
+              <span className="font-bold">{analysis.examplesGiven || 0}</span>
+            </div>
           </div>
           
           {/* Enhanced Teaching Metrics */}
@@ -318,23 +450,84 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
         </div>
       )}
       
-      {transcript && (
-        <div className="mt-4">
-          <h4 className="font-semibold mb-2">Live Transcript:</h4>
-          <div className="bg-gray-50 p-3 rounded-lg max-h-32 overflow-y-auto text-sm text-gray-700">{transcript}</div>
-        </div>
-      )}
-      
       {report && !isMonitoring && (
         <div className="mt-4 bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
-          <h4 className="font-bold text-lg mb-2">Session Report</h4>
-          {teacherInfo && (
-            <p className="text-sm text-gray-600 mb-2">Teacher: <span className="font-semibold">{teacherInfo.name}</span></p>
-          )}
-          <p><strong>Grade:</strong> <span className={`text-2xl font-bold ${getGradeColor(report.grade)}`}>{report.grade}</span></p>
-          <p><strong>Status:</strong> <span className={`px-2 py-1 rounded text-sm ${getStatusColor(report.status)}`}>{report.status}</span></p>
-          <p><strong>Duration:</strong> {report.totalDuration} minutes</p>
-          <p><strong>On-Topic:</strong> {report.onTopicPercentage}%</p>
+          <h4 className="font-bold text-lg mb-3 flex items-center">
+            <CheckCircle className="w-5 h-5 mr-2 text-purple-600" />
+            Lecture Summary Report
+          </h4>
+          
+          {/* Teacher & Grade Header */}
+          <div className="flex items-center justify-between mb-4 bg-white p-3 rounded-lg">
+            <div>
+              {teacherInfo && (
+                <p className="text-gray-600">Teacher: <span className="font-bold text-gray-800">{teacherInfo.name}</span></p>
+              )}
+              <p className="text-gray-600">Topic: <span className="font-semibold">{topic}</span></p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-gray-500">Overall Grade</p>
+              <span className={`text-4xl font-bold ${getGradeColor(report.grade)}`}>{report.grade}</span>
+            </div>
+          </div>
+
+          {/* Time Breakdown */}
+          <div className="bg-white p-4 rounded-lg mb-3">
+            <h5 className="font-semibold text-gray-700 mb-3 flex items-center">
+              <Clock className="w-4 h-4 mr-2" />Lecture Duration Breakdown
+            </h5>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-2xl font-bold text-blue-600">{report.totalDuration}</p>
+                <p className="text-xs text-blue-500">Total Minutes</p>
+              </div>
+              <div className="bg-green-50 p-3 rounded-lg">
+                <p className="text-2xl font-bold text-green-600">{report.onTopicMinutes || Math.round(report.totalDuration * report.onTopicPercentage / 100)}</p>
+                <p className="text-xs text-green-500">On-Topic (min)</p>
+              </div>
+              <div className="bg-red-50 p-3 rounded-lg">
+                <p className="text-2xl font-bold text-red-600">{report.offTopicMinutes || Math.round(report.totalDuration * (100 - report.onTopicPercentage) / 100)}</p>
+                <p className="text-xs text-red-500">Off-Topic (min)</p>
+              </div>
+            </div>
+            
+            {/* Visual Time Bar */}
+            <div className="mt-3">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-green-600">On-Topic: {report.onTopicPercentage}%</span>
+                <span className="text-red-600">Off-Topic: {100 - report.onTopicPercentage}%</span>
+              </div>
+              <div className="h-4 bg-gray-200 rounded-full overflow-hidden flex">
+                <div className="bg-green-500" style={{ width: `${report.onTopicPercentage}%` }}></div>
+                <div className="bg-red-400" style={{ width: `${100 - report.onTopicPercentage}%` }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Performance Status */}
+          <div className={`p-3 rounded-lg mb-3 ${getStatusColor(report.status)}`}>
+            <p className="font-semibold">{report.status}</p>
+          </div>
+          
+          {/* Teaching Stats */}
+          <div className="bg-white p-3 rounded-lg mb-3 grid grid-cols-4 gap-2 text-center text-sm">
+            <div>
+              <p className="font-bold text-purple-600">{report.totalWords || 0}</p>
+              <p className="text-xs text-gray-500">Words Spoken</p>
+            </div>
+            <div>
+              <p className="font-bold text-blue-600">{report.questionsAsked || 0}</p>
+              <p className="text-xs text-gray-500">Questions</p>
+            </div>
+            <div>
+              <p className="font-bold text-green-600">{report.examplesGiven || 0}</p>
+              <p className="text-xs text-gray-500">Examples</p>
+            </div>
+            <div>
+              <p className="font-bold text-orange-600">{report.wordsPerMinute || 0}</p>
+              <p className="text-xs text-gray-500">WPM</p>
+            </div>
+          </div>
           
           {/* Strengths */}
           {report.strengths?.length > 0 && (
@@ -355,6 +548,18 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
               </ul>
             </div>
           )}
+
+          {/* Keywords Detected */}
+          {report.keywordsDetected?.length > 0 && (
+            <div className="mt-2 bg-blue-50 p-3 rounded-lg">
+              <h5 className="font-semibold text-blue-700 flex items-center"><Target className="w-4 h-4 mr-1" />Topic Keywords Detected</h5>
+              <div className="flex flex-wrap gap-1 mt-2">
+                {report.keywordsDetected.slice(0, 15).map((kw, i) => (
+                  <span key={i} className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">{kw}</span>
+                ))}
+              </div>
+            </div>
+          )}
           
           {report.suggestions?.length > 0 && (
             <div className="mt-3">
@@ -367,6 +572,14 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Full Transcript */}
+          {transcript && (
+            <div className="mt-3">
+              <h5 className="font-semibold text-gray-700 mb-2">Full Transcript:</h5>
+              <div className="bg-gray-50 p-3 rounded-lg max-h-40 overflow-y-auto text-sm text-gray-700">{transcript}</div>
             </div>
           )}
         </div>

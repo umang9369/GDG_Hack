@@ -1,5 +1,5 @@
-// Enhanced Teacher Monitoring Service - Full Topic Support with Custom Topics
-// Provides detailed analysis, teaching style metrics, and improvement suggestions
+// Enhanced Teacher Monitoring Service - LIVE Speech Recognition
+// Real-time analysis with actual microphone capture
 
 class TeacherMonitoringService {
   constructor() {
@@ -11,186 +11,120 @@ class TeacherMonitoringService {
     this.sessionData = [];
     this.onTopicScore = 0;
     this.offTopicSegments = [];
+    this.onTopicSegments = [];
     this.suggestions = [];
-    this.dbName = 'EduPulseTeacherDB';
     this.customTopics = {};
+    this.sessionStartTime = null;
+    this.wordCount = 0;
+    this.questionCount = 0;
+    this.exampleCount = 0;
+    this.onTopicTime = 0;
+    this.offTopicTime = 0;
+    this.lastSegmentTime = null;
+    this.liveStatus = 'waiting'; // 'waiting', 'on-topic', 'off-topic'
+    this.mode = 'waiting'; // 'live', 'simulation', 'waiting'
     this.teachingMetrics = {
-      clarity: 0,
-      engagement: 0,
-      pacing: 0,
-      exampleUsage: 0,
-      questionAsking: 0
+      clarity: 70,
+      engagement: 70,
+      pacing: 70,
+      exampleUsage: 70,
+      questionAsking: 70
     };
+    
+    // Callbacks
+    this.onTranscriptUpdate = null;
+    this.onAnalysisUpdate = null;
+    this.onLiveStatus = null;
+    this.onError = null;
   }
 
   // Comprehensive curriculum topics database
   curriculumTopics = {
     mathematics: {
       'quadratic equations': [
-        'quadratic', 'equation', 'ax squared', 'bx', 'polynomial', 'degree 2',
-        'factorization', 'roots', 'discriminant', 'formula', 'parabola',
-        'coefficient', 'variable', 'solution', 'factor', 'completing the square',
-        'vertex', 'axis of symmetry', 'zero product', 'quadratic formula'
+        'quadratic', 'equation', 'ax', 'bx', 'squared', 'square', 'polynomial', 'degree',
+        'factorization', 'factor', 'roots', 'root', 'discriminant', 'formula', 'parabola',
+        'coefficient', 'variable', 'solution', 'solve', 'completing', 'vertex', 'axis',
+        'symmetry', 'zero', 'product', 'x squared', 'x square', 'plus', 'minus', 'equal',
+        'value', 'find', 'calculate', 'graph', 'curve', 'positive', 'negative', 'real',
+        'imaginary', 'complex', 'number', 'two', 'solutions', 'method', 'substitution',
+        'standard', 'form', 'general', 'expression', 'term', 'power', 'quadratic formula'
       ],
       'linear equations': [
-        'linear', 'straight line', 'slope', 'intercept', 'y equals mx plus b',
-        'gradient', 'coordinate', 'axis', 'graph', 'variable', 'constant',
-        'parallel', 'perpendicular', 'point slope', 'standard form'
+        'linear', 'straight', 'line', 'slope', 'intercept', 'mx', 'gradient', 'coordinate',
+        'axis', 'graph', 'variable', 'constant', 'parallel', 'perpendicular', 'point'
       ],
       'trigonometry': [
-        'sine', 'cosine', 'tangent', 'angle', 'triangle', 'hypotenuse',
-        'opposite', 'adjacent', 'degree', 'radian', 'pythagoras', 'ratio',
-        'secant', 'cosecant', 'cotangent', 'identity', 'unit circle'
+        'sine', 'sin', 'cosine', 'cos', 'tangent', 'tan', 'angle', 'triangle', 'hypotenuse',
+        'opposite', 'adjacent', 'degree', 'radian', 'pythagoras', 'ratio', 'theta'
       ],
       'algebra': [
-        'variable', 'expression', 'equation', 'polynomial', 'factor',
-        'simplify', 'solve', 'substitute', 'coefficient', 'term',
-        'exponent', 'radical', 'inequality', 'function', 'domain', 'range'
+        'variable', 'expression', 'equation', 'polynomial', 'factor', 'simplify', 'solve',
+        'substitute', 'coefficient', 'term', 'exponent', 'power', 'radical', 'inequality'
       ],
       'geometry': [
-        'angle', 'triangle', 'circle', 'square', 'rectangle', 'polygon',
-        'area', 'perimeter', 'volume', 'congruent', 'similar', 'parallel',
-        'perpendicular', 'radius', 'diameter', 'circumference', 'theorem'
+        'angle', 'triangle', 'circle', 'square', 'rectangle', 'polygon', 'area', 'perimeter',
+        'volume', 'congruent', 'similar', 'parallel', 'perpendicular', 'radius', 'diameter'
       ],
       'calculus': [
-        'derivative', 'integral', 'limit', 'function', 'slope', 'rate',
-        'differentiation', 'integration', 'continuous', 'tangent', 'curve',
-        'maximum', 'minimum', 'optimization', 'chain rule', 'product rule'
+        'derivative', 'integral', 'limit', 'function', 'slope', 'rate', 'differentiation',
+        'integration', 'continuous', 'tangent', 'curve', 'maximum', 'minimum'
       ],
       'statistics': [
-        'mean', 'median', 'mode', 'average', 'standard deviation', 'variance',
-        'probability', 'distribution', 'sample', 'population', 'hypothesis',
-        'correlation', 'regression', 'data', 'frequency', 'histogram'
-      ],
-      'matrices': [
-        'matrix', 'determinant', 'inverse', 'multiplication', 'addition',
-        'transpose', 'row', 'column', 'identity', 'vector', 'eigenvalue'
+        'mean', 'median', 'mode', 'average', 'deviation', 'variance', 'probability',
+        'distribution', 'sample', 'population', 'hypothesis', 'correlation', 'data'
       ]
     },
     science: {
       'photosynthesis': [
-        'chlorophyll', 'sunlight', 'carbon dioxide', 'oxygen', 'glucose',
-        'plant', 'leaf', 'chloroplast', 'energy', 'water', 'stoma',
-        'light reaction', 'dark reaction', 'calvin cycle', 'atp'
+        'chlorophyll', 'sunlight', 'carbon', 'dioxide', 'oxygen', 'glucose', 'plant', 'leaf',
+        'chloroplast', 'energy', 'water', 'stoma', 'light', 'reaction', 'calvin', 'atp'
       ],
       'newton laws': [
-        'force', 'mass', 'acceleration', 'inertia', 'motion', 'action',
-        'reaction', 'velocity', 'momentum', 'friction', 'newton', 'gravity',
-        'equilibrium', 'net force', 'kinematics', 'dynamics'
+        'force', 'mass', 'acceleration', 'inertia', 'motion', 'action', 'reaction', 'velocity',
+        'momentum', 'friction', 'newton', 'gravity', 'equilibrium', 'net', 'kinematics'
       ],
       'atoms': [
-        'electron', 'proton', 'neutron', 'nucleus', 'orbit', 'element',
-        'atomic number', 'mass number', 'isotope', 'ion', 'charge',
-        'shell', 'valence', 'bond', 'molecule', 'compound'
+        'electron', 'proton', 'neutron', 'nucleus', 'orbit', 'element', 'atomic', 'number',
+        'mass', 'isotope', 'ion', 'charge', 'shell', 'valence', 'bond', 'molecule'
       ],
       'chemical reactions': [
-        'reactant', 'product', 'catalyst', 'equation', 'balance', 'acid',
-        'base', 'salt', 'oxidation', 'reduction', 'exothermic', 'endothermic',
-        'combustion', 'synthesis', 'decomposition', 'displacement'
+        'reactant', 'product', 'catalyst', 'equation', 'balance', 'acid', 'base', 'salt',
+        'oxidation', 'reduction', 'exothermic', 'endothermic', 'combustion', 'synthesis'
       ],
       'electricity': [
-        'current', 'voltage', 'resistance', 'ohm', 'circuit', 'conductor',
-        'insulator', 'ampere', 'watt', 'electron flow', 'battery', 'switch',
-        'series', 'parallel', 'capacitor', 'electromagnetic'
-      ],
-      'magnetism': [
-        'magnet', 'pole', 'field', 'attract', 'repel', 'compass', 'iron',
-        'electromagnetic', 'induction', 'flux', 'coil', 'motor', 'generator'
-      ],
-      'biology': [
-        'cell', 'organism', 'tissue', 'organ', 'system', 'dna', 'gene',
-        'chromosome', 'protein', 'mitosis', 'meiosis', 'evolution', 'ecology'
-      ],
-      'human body': [
-        'heart', 'brain', 'lung', 'liver', 'kidney', 'blood', 'bone',
-        'muscle', 'nerve', 'digestion', 'respiration', 'circulation', 'immune'
+        'current', 'voltage', 'resistance', 'ohm', 'circuit', 'conductor', 'insulator',
+        'ampere', 'watt', 'electron', 'battery', 'switch', 'series', 'parallel'
       ]
     },
     english: {
       'grammar': [
-        'noun', 'verb', 'adjective', 'adverb', 'pronoun', 'preposition',
-        'conjunction', 'sentence', 'clause', 'phrase', 'tense', 'subject',
-        'object', 'predicate', 'modifier', 'article', 'voice', 'mood'
+        'noun', 'verb', 'adjective', 'adverb', 'pronoun', 'preposition', 'conjunction',
+        'sentence', 'clause', 'phrase', 'tense', 'subject', 'object', 'predicate'
       ],
       'literature': [
-        'poem', 'story', 'character', 'plot', 'theme', 'metaphor',
-        'simile', 'imagery', 'author', 'narrative', 'setting', 'conflict',
-        'resolution', 'symbolism', 'irony', 'foreshadowing', 'protagonist'
-      ],
-      'writing skills': [
-        'essay', 'paragraph', 'introduction', 'conclusion', 'thesis',
-        'argument', 'evidence', 'citation', 'draft', 'revision', 'edit',
-        'coherence', 'clarity', 'tone', 'style', 'audience'
-      ],
-      'comprehension': [
-        'reading', 'understanding', 'inference', 'summary', 'main idea',
-        'detail', 'context', 'vocabulary', 'interpretation', 'analysis'
-      ],
-      'poetry': [
-        'rhyme', 'meter', 'stanza', 'verse', 'rhythm', 'alliteration',
-        'assonance', 'sonnet', 'haiku', 'free verse', 'imagery', 'tone'
+        'poem', 'poetry', 'story', 'character', 'plot', 'theme', 'metaphor', 'simile',
+        'imagery', 'author', 'narrative', 'setting', 'conflict', 'resolution', 'symbolism'
       ]
     },
     history: {
       'independence': [
-        'freedom', 'british', 'gandhi', 'nehru', 'partition', 'struggle',
-        'movement', 'salt march', 'quit india', 'independence', 'colony',
-        'revolution', 'nationalism', 'swadeshi', 'civil disobedience'
-      ],
-      'ancient india': [
-        'indus valley', 'harappa', 'mohenjo daro', 'vedic', 'maurya',
-        'gupta', 'ashoka', 'civilization', 'empire', 'dynasty', 'sanskrit',
-        'buddha', 'jainism', 'hinduism', 'trade route'
+        'freedom', 'british', 'gandhi', 'nehru', 'partition', 'struggle', 'movement',
+        'salt', 'march', 'quit', 'india', 'independence', 'colony', 'revolution'
       ],
       'world wars': [
-        'war', 'battle', 'army', 'navy', 'alliance', 'treaty', 'weapon',
-        'soldier', 'victory', 'defeat', 'occupation', 'liberation', 'peace'
-      ],
-      'medieval india': [
-        'mughal', 'sultan', 'kingdom', 'empire', 'invasion', 'akbar',
-        'architecture', 'trade', 'culture', 'religion', 'conquest'
-      ]
-    },
-    geography: {
-      'climate': [
-        'weather', 'temperature', 'rainfall', 'humidity', 'season', 'monsoon',
-        'tropical', 'temperate', 'polar', 'atmosphere', 'precipitation'
-      ],
-      'landforms': [
-        'mountain', 'plateau', 'plain', 'valley', 'river', 'ocean', 'lake',
-        'desert', 'forest', 'island', 'peninsula', 'continent'
-      ],
-      'maps': [
-        'scale', 'direction', 'symbol', 'legend', 'latitude', 'longitude',
-        'grid', 'compass', 'projection', 'contour', 'elevation'
+        'war', 'battle', 'army', 'navy', 'alliance', 'treaty', 'weapon', 'soldier',
+        'victory', 'defeat', 'occupation', 'liberation', 'peace'
       ]
     },
     computer_science: {
       'programming basics': [
-        'variable', 'function', 'loop', 'condition', 'array', 'string',
-        'integer', 'boolean', 'syntax', 'algorithm', 'debug', 'compile'
+        'variable', 'function', 'loop', 'condition', 'array', 'string', 'integer',
+        'boolean', 'syntax', 'algorithm', 'debug', 'compile', 'code', 'program'
       ],
       'data structures': [
-        'array', 'list', 'stack', 'queue', 'tree', 'graph', 'hash',
-        'linked list', 'sorting', 'searching', 'complexity', 'algorithm'
-      ],
-      'web development': [
-        'html', 'css', 'javascript', 'website', 'browser', 'server',
-        'database', 'api', 'frontend', 'backend', 'responsive', 'framework'
-      ],
-      'artificial intelligence': [
-        'machine learning', 'neural network', 'deep learning', 'algorithm',
-        'model', 'training', 'prediction', 'classification', 'regression'
-      ]
-    },
-    economics: {
-      'microeconomics': [
-        'demand', 'supply', 'price', 'market', 'consumer', 'producer',
-        'equilibrium', 'elasticity', 'cost', 'revenue', 'profit', 'utility'
-      ],
-      'macroeconomics': [
-        'gdp', 'inflation', 'unemployment', 'fiscal', 'monetary', 'policy',
-        'trade', 'export', 'import', 'budget', 'deficit', 'growth'
+        'array', 'list', 'stack', 'queue', 'tree', 'graph', 'hash', 'linked',
+        'sorting', 'searching', 'complexity', 'algorithm'
       ]
     }
   };
@@ -203,14 +137,6 @@ class TeacherMonitoringService {
       topics[formattedSubject] = Object.keys(subjectTopics).map(t => 
         t.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
       );
-    }
-    // Add custom topics
-    for (const [subject, customSubjectTopics] of Object.entries(this.customTopics)) {
-      const formattedSubject = subject.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      if (!topics[formattedSubject]) topics[formattedSubject] = [];
-      topics[formattedSubject].push(...Object.keys(customSubjectTopics).map(t =>
-        t.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-      ));
     }
     return topics;
   }
@@ -226,19 +152,16 @@ class TeacherMonitoringService {
     
     this.customTopics[subjectKey][topicKey] = keywords;
     
-    // Also add to curriculum
     if (!this.curriculumTopics[subjectKey]) {
       this.curriculumTopics[subjectKey] = {};
     }
     this.curriculumTopics[subjectKey][topicKey] = keywords;
     
-    // Save to localStorage
     localStorage.setItem('customTopics', JSON.stringify(this.customTopics));
-    
     return { success: true, topic: topicName, subject };
   }
 
-  // Load custom topics from storage
+  // Load custom topics
   loadCustomTopics() {
     try {
       const saved = localStorage.getItem('customTopics');
@@ -256,30 +179,49 @@ class TeacherMonitoringService {
     }
   }
 
-  // Initialize speech recognition
+  // Initialize speech recognition - REAL microphone capture
   initSpeechRecognition() {
     this.loadCustomTopics();
     
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      console.warn('Speech recognition not supported, using simulation mode');
-      return false;
+    // Check for browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      console.warn('Speech recognition not supported in this browser');
+      return { success: false, reason: 'not-supported' };
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     this.recognition = new SpeechRecognition();
     
+    // Configure for continuous, real-time recognition
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
-    this.recognition.lang = 'en-IN';
+    this.recognition.lang = 'en-IN'; // Indian English
+    this.recognition.maxAlternatives = 1;
     
+    // Handle speech results
     this.recognition.onresult = (event) => {
       let interimTranscript = '';
       let finalTranscript = '';
       
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
+        const result = event.results[i];
+        const transcript = result[0].transcript;
+        
+        if (result.isFinal) {
           finalTranscript += transcript + ' ';
+          // Analyze final transcript
+          const analysis = this.analyzeSegment(transcript);
+          
+          // Update live status
+          if (this.onLiveStatus) {
+            this.onLiveStatus({
+              status: analysis.isOnTopic ? 'on-topic' : 'off-topic',
+              text: transcript,
+              matchedKeywords: analysis.matchedKeywords,
+              confidence: result[0].confidence || 0.9
+            });
+          }
         } else {
           interimTranscript += transcript;
         }
@@ -287,112 +229,268 @@ class TeacherMonitoringService {
       
       if (finalTranscript) {
         this.transcript += finalTranscript;
-        this.analyzeSegment(finalTranscript);
       }
       
+      // Always update transcript (both final and interim)
       if (this.onTranscriptUpdate) {
         this.onTranscriptUpdate(this.transcript, interimTranscript);
       }
     };
     
+    // Handle errors
     this.recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
-      if (this.onError) this.onError(event.error);
-    };
-    
-    this.recognition.onend = () => {
-      if (this.isListening) {
-        try { this.recognition.start(); } catch (e) {}
+      
+      if (event.error === 'not-allowed') {
+        if (this.onError) this.onError('Microphone access denied. Please allow microphone access.');
+      } else if (event.error === 'no-speech') {
+        // Restart recognition if no speech detected
+        if (this.isListening) {
+          try { this.recognition.start(); } catch (e) {}
+        }
+      } else if (event.error === 'aborted') {
+        // Restart on abort
+        if (this.isListening) {
+          setTimeout(() => {
+            try { this.recognition.start(); } catch (e) {}
+          }, 100);
+        }
+      } else {
+        if (this.onError) this.onError(`Speech error: ${event.error}`);
       }
     };
     
-    return true;
+    // Auto-restart when recognition ends
+    this.recognition.onend = () => {
+      if (this.isListening) {
+        setTimeout(() => {
+          try {
+            this.recognition.start();
+          } catch (e) {
+            console.log('Could not restart recognition:', e);
+          }
+        }, 100);
+      }
+    };
+    
+    this.recognition.onstart = () => {
+      console.log('🎤 Speech recognition started - listening...');
+      this.mode = 'live';
+    };
+    
+    return { success: true, reason: 'initialized' };
   }
 
-  // Start monitoring with any topic
+  // Start monitoring with LIVE microphone
   startMonitoring(topic, subject, callbacks = {}) {
+    // Reset all state
     this.currentTopic = topic.toLowerCase();
     this.currentSubject = subject.toLowerCase().replace(/ /g, '_');
     this.transcript = '';
     this.sessionData = [];
     this.onTopicScore = 0;
     this.offTopicSegments = [];
+    this.onTopicSegments = [];
     this.suggestions = [];
     this.sessionStartTime = new Date();
+    this.lastSegmentTime = new Date();
     this.wordCount = 0;
     this.questionCount = 0;
     this.exampleCount = 0;
+    this.onTopicTime = 0;
+    this.offTopicTime = 0;
+    this.liveStatus = 'waiting';
+    this.mode = 'waiting';
     this.teachingMetrics = { clarity: 70, engagement: 70, pacing: 70, exampleUsage: 70, questionAsking: 70 };
     
+    // Set callbacks
     this.onTranscriptUpdate = callbacks.onTranscript;
     this.onAnalysisUpdate = callbacks.onAnalysis;
+    this.onLiveStatus = callbacks.onLiveStatus;
     this.onError = callbacks.onError;
     
-    if (this.recognition) {
-      try {
-        this.recognition.start();
+    // Initialize speech recognition if not done
+    if (!this.recognition) {
+      const initResult = this.initSpeechRecognition();
+      if (!initResult.success) {
+        // Fallback to simulation mode
         this.isListening = true;
-        return { success: true, mode: 'live' };
-      } catch (error) {
-        this.isListening = true;
+        this.mode = 'simulation';
         this.startSimulation();
-        return { success: true, mode: 'simulation' };
+        return { success: true, mode: 'simulation', message: 'Using simulation mode (speech not supported)' };
       }
-    } else {
+    }
+    
+    // Start listening
+    try {
+      this.recognition.start();
       this.isListening = true;
+      this.mode = 'live';
+      
+      // Start periodic analysis updates
+      this.analysisInterval = setInterval(() => {
+        if (this.onAnalysisUpdate && this.isListening) {
+          this.onAnalysisUpdate(this.getDetailedAnalysis());
+        }
+      }, 1000); // Update every second
+      
+      return { success: true, mode: 'live', message: '🎤 Live microphone active' };
+    } catch (error) {
+      console.error('Could not start speech recognition:', error);
+      // Fallback to simulation
+      this.isListening = true;
+      this.mode = 'simulation';
       this.startSimulation();
-      return { success: true, mode: 'simulation' };
+      return { success: true, mode: 'simulation', message: 'Using simulation mode' };
     }
   }
 
   // Stop monitoring
   stopMonitoring() {
     this.isListening = false;
-    if (this.recognition) { try { this.recognition.stop(); } catch(e) {} }
-    if (this.simulationInterval) { clearInterval(this.simulationInterval); }
+    
+    if (this.recognition) {
+      try {
+        this.recognition.stop();
+      } catch (e) {}
+    }
+    
+    if (this.simulationInterval) {
+      clearInterval(this.simulationInterval);
+    }
+    
+    if (this.analysisInterval) {
+      clearInterval(this.analysisInterval);
+    }
+    
     return this.generateDetailedReport();
   }
 
-  // Analyze a speech segment
+  // Analyze a speech segment - IMPROVED ALGORITHM
   analyzeSegment(text) {
-    const words = text.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    const now = new Date();
+    const segmentDuration = this.lastSegmentTime ? (now - this.lastSegmentTime) / 1000 : 3;
+    this.lastSegmentTime = now;
+    
+    // Tokenize and clean words
+    const words = text.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 1);
+    
     const topicKeywords = this.getTopicKeywords();
     
+    // Count keyword matches with partial matching
     let matchCount = 0;
     const matchedKeywords = [];
     
     words.forEach(word => {
-      if (topicKeywords.some(kw => word.includes(kw) || kw.includes(word))) {
+      const isMatch = topicKeywords.some(kw => {
+        // Exact match
+        if (word === kw) return true;
+        // Word contains keyword (min 3 chars)
+        if (kw.length >= 3 && word.includes(kw)) return true;
+        // Keyword contains word (min 4 chars)
+        if (word.length >= 4 && kw.includes(word)) return true;
+        // Starts with same letters
+        if (word.length >= 4 && kw.length >= 4) {
+          if (word.substring(0, 4) === kw.substring(0, 4)) return true;
+        }
+        return false;
+      });
+      
+      if (isMatch) {
         matchCount++;
-        matchedKeywords.push(word);
+        if (!matchedKeywords.includes(word)) {
+          matchedKeywords.push(word);
+        }
       }
     });
     
     this.wordCount += words.length;
     
-    const questionIndicators = ['what', 'why', 'how', 'when', 'where', 'who', 'which', 'can anyone', 'does anyone', 'understand'];
-    const exampleIndicators = ['for example', 'example', 'such as', 'like', 'instance', 'consider', 'suppose', 'imagine'];
-    const clarityIndicators = ['therefore', 'because', 'so', 'thus', 'hence', 'in other words', 'simply put'];
+    // Check for teaching indicators
+    const textLower = text.toLowerCase();
+    const questionIndicators = ['what', 'why', 'how', 'when', 'where', 'who', 'which', 'can you', 'do you', 'understand', 'clear', 'question', 'doubt', 'tell me', 'anyone'];
+    const exampleIndicators = ['for example', 'example', 'such as', 'like this', 'instance', 'consider', 'suppose', 'imagine', 'let us', 'lets', "let's", 'look at', 'say'];
+    const clarityIndicators = ['therefore', 'because', 'so', 'thus', 'hence', 'means', 'meaning', 'other words', 'simply', 'basically', 'actually', 'important', 'remember', 'note'];
     
-    const hasQuestion = questionIndicators.some(q => text.toLowerCase().includes(q));
-    const hasExample = exampleIndicators.some(e => text.toLowerCase().includes(e));
-    const hasClarity = clarityIndicators.some(c => text.toLowerCase().includes(c));
+    const hasQuestion = questionIndicators.some(q => textLower.includes(q));
+    const hasExample = exampleIndicators.some(e => textLower.includes(e));
+    const hasClarity = clarityIndicators.some(c => textLower.includes(c));
     
-    if (hasQuestion) { this.questionCount++; this.teachingMetrics.questionAsking = Math.min(100, this.teachingMetrics.questionAsking + 3); this.teachingMetrics.engagement = Math.min(100, this.teachingMetrics.engagement + 2); }
-    if (hasExample) { this.exampleCount++; this.teachingMetrics.exampleUsage = Math.min(100, this.teachingMetrics.exampleUsage + 4); this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 2); }
-    if (hasClarity) { this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 2); }
+    // Update teaching metrics
+    if (hasQuestion) {
+      this.questionCount++;
+      this.teachingMetrics.questionAsking = Math.min(100, this.teachingMetrics.questionAsking + 5);
+      this.teachingMetrics.engagement = Math.min(100, this.teachingMetrics.engagement + 3);
+    }
+    if (hasExample) {
+      this.exampleCount++;
+      this.teachingMetrics.exampleUsage = Math.min(100, this.teachingMetrics.exampleUsage + 6);
+      this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 3);
+    }
+    if (hasClarity) {
+      this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 3);
+    }
     
-    // More lenient scoring - even 1 keyword match in a short segment is considered on-topic
-    const segmentScore = words.length > 0 ? Math.min(100, (matchCount / Math.max(words.length * 0.15, 1)) * 100) : 0;
-    const isOnTopic = segmentScore >= 15 || matchCount >= 1 || words.length <= 3;
+    // Calculate if on-topic - VERY LENIENT scoring
+    // Any keyword match or teaching indicator counts as on-topic
+    const hasKeywordMatch = matchCount >= 1;
+    const hasTeachingIndicator = hasQuestion || hasExample || hasClarity;
+    const isShortSegment = words.length <= 5;
     
-    const segmentAnalysis = { text, timestamp: new Date().toISOString(), score: Math.min(segmentScore, 100), isOnTopic, matchedKeywords, wordCount: words.length, hasQuestion, hasExample, hasClarity };
+    // A segment is on-topic if:
+    // 1. It has at least one keyword match, OR
+    // 2. It has a teaching indicator (question/example/clarity), OR
+    // 3. It's a short segment (likely transitional)
+    const isOnTopic = hasKeywordMatch || hasTeachingIndicator || isShortSegment;
+    
+    // Calculate segment score (0-100)
+    let segmentScore = 50; // Base score
+    segmentScore += matchCount * 15; // Each keyword match adds 15%
+    segmentScore += hasQuestion ? 10 : 0;
+    segmentScore += hasExample ? 10 : 0;
+    segmentScore += hasClarity ? 5 : 0;
+    segmentScore = Math.min(100, segmentScore);
+    
+    // Track time on/off topic (use segment duration)
+    if (isOnTopic) {
+      this.onTopicTime += segmentDuration;
+    } else {
+      this.offTopicTime += segmentDuration;
+    }
+    
+    // Create segment analysis
+    const segmentAnalysis = {
+      text,
+      timestamp: now.toISOString(),
+      score: segmentScore,
+      isOnTopic,
+      matchedKeywords,
+      wordCount: words.length,
+      hasQuestion,
+      hasExample,
+      hasClarity,
+      duration: segmentDuration
+    };
     
     this.sessionData.push(segmentAnalysis);
-    if (!isOnTopic && words.length > 3) { this.offTopicSegments.push({ text: text.substring(0, 150), timestamp: segmentAnalysis.timestamp }); }
     
-    this.calculateOverallScore();
-    if (this.onAnalysisUpdate) { this.onAnalysisUpdate(this.getDetailedAnalysis()); }
+    // Store in appropriate list
+    if (isOnTopic) {
+      this.onTopicSegments.push(segmentAnalysis);
+    } else {
+      this.offTopicSegments.push(segmentAnalysis);
+    }
+    
+    // Update live status
+    this.liveStatus = isOnTopic ? 'on-topic' : 'off-topic';
+    
+    // Trigger analysis update
+    if (this.onAnalysisUpdate) {
+      this.onAnalysisUpdate(this.getDetailedAnalysis());
+    }
     
     return segmentAnalysis;
   }
@@ -400,54 +498,97 @@ class TeacherMonitoringService {
   // Get keywords for current topic
   getTopicKeywords() {
     const subject = this.curriculumTopics[this.currentSubject];
+    
     if (!subject) {
+      // Search all subjects for matching topic
       for (const subj of Object.values(this.curriculumTopics)) {
         for (const [topic, keywords] of Object.entries(subj)) {
-          if (this.currentTopic.includes(topic) || topic.includes(this.currentTopic)) { return keywords; }
+          if (this.currentTopic.includes(topic) || topic.includes(this.currentTopic)) {
+            return keywords;
+          }
         }
       }
       return [];
     }
+    
+    // Find exact or partial topic match
     for (const [topic, keywords] of Object.entries(subject)) {
-      if (this.currentTopic.includes(topic) || topic.includes(this.currentTopic)) { return keywords; }
+      if (this.currentTopic.includes(topic) || topic.includes(this.currentTopic)) {
+        return keywords;
+      }
     }
+    
+    // Return all keywords from subject as fallback
     return Object.values(subject).flat();
   }
 
-  calculateOverallScore() {
-    if (this.sessionData.length === 0) { this.onTopicScore = 0; return; }
-    this.onTopicScore = this.sessionData.reduce((sum, seg) => sum + seg.score, 0) / this.sessionData.length;
-  }
-
+  // Get detailed analysis - LIVE data
   getDetailedAnalysis() {
-    const duration = Math.round((new Date() - this.sessionStartTime) / 1000 / 60);
-    const onTopicCount = this.sessionData.filter(s => s.isOnTopic).length;
-    const onTopicPercentage = this.sessionData.length > 0 ? Math.round((onTopicCount / this.sessionData.length) * 100) : 0;
-    const wordsPerMinute = duration > 0 ? Math.round(this.wordCount / duration) : 0;
+    const now = new Date();
+    const durationMs = now - this.sessionStartTime;
+    const durationMinutes = Math.max(0, Math.floor(durationMs / 1000 / 60));
+    const durationSeconds = Math.round(durationMs / 1000);
     
-    if (wordsPerMinute > 100 && wordsPerMinute < 160) { this.teachingMetrics.pacing = Math.min(100, 85 + Math.random() * 10); }
-    else if (wordsPerMinute > 160) { this.teachingMetrics.pacing = Math.max(50, 70 - (wordsPerMinute - 160) / 2); }
-    else if (wordsPerMinute < 80 && wordsPerMinute > 0) { this.teachingMetrics.pacing = Math.max(50, 70 - (80 - wordsPerMinute) / 2); }
+    // Calculate on-topic percentage from segments
+    const totalSegments = this.sessionData.length;
+    const onTopicSegmentCount = this.sessionData.filter(s => s.isOnTopic).length;
+    const onTopicPercentage = totalSegments > 0 ? Math.round((onTopicSegmentCount / totalSegments) * 100) : 100;
+    
+    // Calculate time-based on-topic
+    const totalTrackedTime = this.onTopicTime + this.offTopicTime;
+    const onTopicTimePercent = totalTrackedTime > 0 
+      ? Math.round((this.onTopicTime / totalTrackedTime) * 100) 
+      : 100;
+    
+    // Use average of both metrics, favor higher score
+    const finalOnTopicPercent = Math.round((Math.max(onTopicPercentage, onTopicTimePercent) * 0.6) + (Math.min(onTopicPercentage, onTopicTimePercent) * 0.4));
+    
+    // Words per minute
+    const wordsPerMinute = durationMinutes > 0 ? Math.round(this.wordCount / Math.max(1, durationMinutes)) : this.wordCount;
+    
+    // Update pacing metric based on WPM
+    if (wordsPerMinute >= 100 && wordsPerMinute <= 160) {
+      this.teachingMetrics.pacing = Math.min(100, 85 + (Math.random() * 10));
+    } else if (wordsPerMinute > 160) {
+      this.teachingMetrics.pacing = Math.max(60, 80 - (wordsPerMinute - 160) / 3);
+    } else if (wordsPerMinute < 80 && wordsPerMinute > 0) {
+      this.teachingMetrics.pacing = Math.max(60, 80 - (80 - wordsPerMinute) / 3);
+    }
     
     return {
-      onTopicPercentage, offTopicCount: this.offTopicSegments.length,
-      onTopicMinutes: Math.round(duration * onTopicPercentage / 100),
-      offTopicMinutes: Math.round(duration * (100 - onTopicPercentage) / 100),
-      totalDuration: duration, status: this.getStatus(onTopicPercentage),
-      teachingMetrics: { ...this.teachingMetrics }, questionsAsked: this.questionCount,
-      examplesGiven: this.exampleCount, wordsPerMinute, totalWords: this.wordCount,
-      segmentCount: this.sessionData.length, recentKeywords: this.sessionData.slice(-3).flatMap(s => s.matchedKeywords)
+      onTopicPercentage: finalOnTopicPercent,
+      onTopicTimePercent,
+      offTopicCount: this.offTopicSegments.length,
+      onTopicCount: this.onTopicSegments.length,
+      onTopicMinutes: Math.floor(this.onTopicTime / 60),
+      offTopicMinutes: Math.floor(this.offTopicTime / 60),
+      onTopicSeconds: Math.round(this.onTopicTime),
+      offTopicSeconds: Math.round(this.offTopicTime),
+      totalDuration: durationMinutes,
+      totalDurationSeconds: durationSeconds,
+      status: this.getStatus(finalOnTopicPercent),
+      liveStatus: this.liveStatus,
+      mode: this.mode,
+      teachingMetrics: { ...this.teachingMetrics },
+      questionsAsked: this.questionCount,
+      examplesGiven: this.exampleCount,
+      wordsPerMinute,
+      totalWords: this.wordCount,
+      segmentCount: totalSegments,
+      recentKeywords: this.sessionData.slice(-5).flatMap(s => s.matchedKeywords).filter((v, i, a) => a.indexOf(v) === i)
     };
   }
 
+  // Get status label
   getStatus(score) {
-    if (score >= 85) return 'Excellent';
-    if (score >= 70) return 'Good';
-    if (score >= 55) return 'Satisfactory';
-    if (score >= 40) return 'Needs Improvement';
+    if (score >= 80) return 'Excellent';
+    if (score >= 65) return 'Good';
+    if (score >= 50) return 'Satisfactory';
+    if (score >= 35) return 'Needs Improvement';
     return 'Critical';
   }
 
+  // Generate final report
   generateDetailedReport() {
     const analysis = this.getDetailedAnalysis();
     const grade = this.calculateGrade(analysis);
@@ -455,28 +596,42 @@ class TeacherMonitoringService {
     const strengths = this.identifyStrengths(analysis);
     const improvements = this.identifyImprovements(analysis);
     
-    return { ...analysis, grade, suggestions, strengths, improvements, offTopicSegments: this.offTopicSegments.slice(0, 5), overallScore: this.onTopicScore, sessionId: `session-${Date.now()}`, topic: this.currentTopic, subject: this.currentSubject, timestamp: new Date().toISOString() };
+    return {
+      ...analysis,
+      grade,
+      suggestions,
+      strengths,
+      improvements,
+      offTopicSegments: this.offTopicSegments.slice(0, 5),
+      onTopicSegments: this.onTopicSegments.slice(-5),
+      overallScore: this.onTopicScore,
+      sessionId: `session-${Date.now()}`,
+      topic: this.currentTopic,
+      subject: this.currentSubject,
+      timestamp: new Date().toISOString(),
+      fullTranscript: this.transcript
+    };
   }
 
+  // Calculate grade - BALANCED formula
   calculateGrade(analysis) {
-    // More balanced grading formula
-    // Topic relevance: 35% weight
-    const topicScore = (analysis.onTopicPercentage / 100) * 35;
+    // Base score from on-topic percentage (40% weight)
+    const topicScore = (analysis.onTopicPercentage / 100) * 40;
     
-    // Teaching metrics average: 35% weight  
-    const metricsAvg = (Object.values(analysis.teachingMetrics).reduce((a, b) => a + b, 0) / 5 / 100) * 35;
+    // Teaching metrics average (30% weight)
+    const metricsAvg = Object.values(analysis.teachingMetrics).reduce((a, b) => a + b, 0) / 5;
+    const metricsScore = (metricsAvg / 100) * 30;
     
-    // Engagement factors: 20% weight (questions and examples)
-    const questionScore = Math.min(10, analysis.questionsAsked * 2);
-    const exampleScore = Math.min(10, analysis.examplesGiven * 3);
-    const engagementScore = questionScore + exampleScore;
+    // Engagement bonus (20% weight) - questions and examples
+    const engagementRaw = Math.min(20, (analysis.questionsAsked * 3) + (analysis.examplesGiven * 4));
+    const engagementScore = engagementRaw;
     
-    // Duration bonus: 10% weight (reward for longer sessions)
-    const durationBonus = Math.min(10, (analysis.totalDuration || 1) * 0.5);
+    // Duration/effort bonus (10% weight)
+    const durationBonus = Math.min(10, analysis.totalDuration * 0.5);
     
-    const finalScore = topicScore + metricsAvg + engagementScore + durationBonus;
+    const finalScore = topicScore + metricsScore + engagementScore + durationBonus;
     
-    // Adjusted grade thresholds for fairer grading
+    // Grade thresholds - more lenient
     if (finalScore >= 80) return 'A+';
     if (finalScore >= 70) return 'A';
     if (finalScore >= 60) return 'B+';
@@ -487,63 +642,139 @@ class TeacherMonitoringService {
     return 'F';
   }
 
+  // Generate improvement suggestions
   generateSuggestions(analysis) {
     const suggestions = [];
-    if (analysis.onTopicPercentage < 70) { suggestions.push({ type: 'content', priority: 'high', message: `Focus more on ${this.currentTopic}. Only ${analysis.onTopicPercentage}% of content was on-topic.`, action: 'Review lesson plan and stick to key concepts' }); }
-    if (analysis.questionsAsked < 3) { suggestions.push({ type: 'engagement', priority: 'medium', message: 'Ask more questions to engage students', action: 'Include 1-2 questions every 5 minutes' }); }
-    if (analysis.examplesGiven < 2) { suggestions.push({ type: 'clarity', priority: 'medium', message: 'Use more examples to illustrate concepts', action: 'Prepare 2-3 real-world examples for each concept' }); }
-    if (analysis.wordsPerMinute > 160) { suggestions.push({ type: 'pacing', priority: 'high', message: 'Speaking pace is too fast', action: 'Slow down and pause after important points' }); }
-    if (analysis.teachingMetrics.clarity < 65) { suggestions.push({ type: 'clarity', priority: 'high', message: 'Use connecting words to improve clarity', action: 'Use words like "therefore", "because", "in other words"' }); }
+    
+    if (analysis.onTopicPercentage < 60) {
+      suggestions.push({
+        type: 'content',
+        priority: 'high',
+        message: `Focus more on ${this.currentTopic}. ${analysis.onTopicPercentage}% of content was on-topic.`,
+        action: 'Use more topic-specific keywords and concepts'
+      });
+    }
+    
+    if (analysis.questionsAsked < 2 && analysis.totalDuration >= 2) {
+      suggestions.push({
+        type: 'engagement',
+        priority: 'medium',
+        message: 'Ask more questions to engage students',
+        action: 'Include comprehension checks every few minutes'
+      });
+    }
+    
+    if (analysis.examplesGiven < 1 && analysis.totalDuration >= 2) {
+      suggestions.push({
+        type: 'clarity',
+        priority: 'medium',
+        message: 'Use more examples to illustrate concepts',
+        action: 'Prepare 2-3 real-world examples for key concepts'
+      });
+    }
+    
+    if (analysis.wordsPerMinute > 170) {
+      suggestions.push({
+        type: 'pacing',
+        priority: 'medium',
+        message: 'Speaking pace is quite fast',
+        action: 'Slow down and pause after important points'
+      });
+    }
+    
     return suggestions;
   }
 
+  // Identify strengths
   identifyStrengths(analysis) {
     const strengths = [];
-    if (analysis.onTopicPercentage >= 80) strengths.push('Excellent focus on the topic');
-    if (analysis.questionsAsked >= 5) strengths.push('Great student engagement through questions');
-    if (analysis.examplesGiven >= 3) strengths.push('Good use of examples');
-    if (analysis.teachingMetrics.pacing >= 80) strengths.push('Appropriate teaching pace');
-    if (analysis.teachingMetrics.clarity >= 80) strengths.push('Clear explanations');
+    
+    if (analysis.onTopicPercentage >= 70) {
+      strengths.push('Good focus on the lesson topic');
+    }
+    if (analysis.questionsAsked >= 2) {
+      strengths.push('Good student engagement through questions');
+    }
+    if (analysis.examplesGiven >= 1) {
+      strengths.push('Effective use of examples');
+    }
+    if (analysis.teachingMetrics.clarity >= 75) {
+      strengths.push('Clear explanations');
+    }
+    if (analysis.teachingMetrics.pacing >= 75) {
+      strengths.push('Appropriate teaching pace');
+    }
+    
     return strengths.length > 0 ? strengths : ['Keep up the good work!'];
   }
 
+  // Identify improvements
   identifyImprovements(analysis) {
     const improvements = [];
-    if (analysis.onTopicPercentage < 70) improvements.push('Stay more focused on the lesson topic');
-    if (analysis.questionsAsked < 3) improvements.push('Ask more questions to check understanding');
-    if (analysis.examplesGiven < 2) improvements.push('Include more practical examples');
-    if (analysis.teachingMetrics.pacing < 65) improvements.push('Adjust speaking pace');
+    
+    if (analysis.onTopicPercentage < 60) {
+      improvements.push('Stay more focused on the lesson topic');
+    }
+    if (analysis.questionsAsked < 2) {
+      improvements.push('Ask more questions to check understanding');
+    }
+    if (analysis.examplesGiven < 1) {
+      improvements.push('Include more practical examples');
+    }
+    if (analysis.teachingMetrics.pacing < 60) {
+      improvements.push('Adjust speaking pace');
+    }
+    
     return improvements;
   }
 
+  // Simulation mode for browsers without speech recognition
   startSimulation() {
     const topicKeywords = this.getTopicKeywords();
-    const kw = (i) => topicKeywords[i] || topicKeywords[0] || 'concept';
+    const kw = (i) => topicKeywords[Math.min(i, topicKeywords.length - 1)] || 'topic';
+    
     const simulatedPhrases = [
-      `Today we'll learn about ${this.currentTopic} and understand the ${kw(0)}`,
-      `Let me explain the concept of ${kw(0)} and ${kw(1)} in detail`,
-      `For example, when we have a ${kw(1)} we can solve it using ${kw(2)}`,
-      `Can anyone tell me what happens when we apply ${kw(0)}?`,
-      `This ${kw(0)} is very important because it relates to ${kw(3)}`,
-      `Let's look at another example of ${kw(1)} and ${kw(2)}`,
-      `Does everyone understand the ${kw(0)} so far?`,
-      `The key point here is the ${kw(2)} which connects to ${kw(0)}`,
-      `In other words, we can say that ${kw(0)} equals ${kw(1)}`,
-      `Who can solve this ${kw(0)} problem using ${kw(2)}?`,
-      `Remember, ${kw(0)} is related to ${kw(3)} and ${kw(1)}`,
-      `Let me show you ${kw(0)} step by step with ${kw(2)}`,
-      `Any questions about ${kw(1)} before we move on to ${kw(3)}?`,
-      `The ${kw(0)} formula helps us calculate ${kw(1)} efficiently`,
-      `Therefore, by understanding ${kw(0)} we master ${kw(2)}`
+      `Today we are learning about ${this.currentTopic}`,
+      `The ${kw(0)} is very important in ${this.currentTopic}`,
+      `Let me explain the concept of ${kw(1)}`,
+      `For example, when we have ${kw(0)} and ${kw(2)}`,
+      `Can anyone tell me what is ${kw(1)}?`,
+      `This is important because ${kw(0)} relates to ${kw(3)}`,
+      `Let's look at another example with ${kw(2)}`,
+      `Do you understand the ${kw(0)} so far?`,
+      `The key point here is ${kw(1)} and ${kw(2)}`,
+      `In other words, ${kw(0)} means ${kw(3)}`,
+      `Who can solve this ${kw(0)} problem?`,
+      `Remember, ${kw(1)} is related to ${kw(2)}`,
+      `Let me show you step by step how ${kw(0)} works`,
+      `Any questions about ${kw(1)}?`,
+      `The formula for ${kw(0)} is straightforward`
     ];
 
     this.simulationInterval = setInterval(() => {
-      if (!this.isListening) { clearInterval(this.simulationInterval); return; }
+      if (!this.isListening) {
+        clearInterval(this.simulationInterval);
+        return;
+      }
+      
       const phrase = simulatedPhrases[Math.floor(Math.random() * simulatedPhrases.length)];
-      this.transcript += phrase + ' ';
-      this.analyzeSegment(phrase);
-      if (this.onTranscriptUpdate) { this.onTranscriptUpdate(this.transcript, ''); }
-    }, 3000);
+      this.transcript += phrase + '. ';
+      
+      const analysis = this.analyzeSegment(phrase);
+      
+      if (this.onTranscriptUpdate) {
+        this.onTranscriptUpdate(this.transcript, '');
+      }
+      
+      if (this.onLiveStatus) {
+        this.onLiveStatus({
+          status: analysis.isOnTopic ? 'on-topic' : 'off-topic',
+          text: phrase,
+          matchedKeywords: analysis.matchedKeywords,
+          confidence: 0.95
+        });
+      }
+    }, 3500);
   }
 }
 
