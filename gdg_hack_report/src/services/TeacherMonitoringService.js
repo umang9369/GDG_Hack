@@ -645,43 +645,196 @@ class TeacherMonitoringService {
     return { isOnTopic, confidence, matchedKeywords, reason };
   }
 
-  // Get strict keywords for current topic
+  // Get strict keywords for current topic - COMPREHENSIVE LIST
   getStrictTopicKeywords() {
     const topicKeywords = {
+      // MATHEMATICS TOPICS
       'quadratic equations': [
-        'quadratic', 'equation', 'squared', 'x squared', 'x square',
-        'ax squared', 'bx', 'polynomial', 'factorization', 'roots',
-        'discriminant', 'quadratic formula', 'parabola', 'vertex',
-        'coefficient', 'b squared', 'four ac', '4ac', 'minus b',
-        'completing the square', 'standard form', 'find x', 'solve for x',
-        'value of x', 'roots of equation', 'sum of roots', 'product of roots',
-        'nature of roots', 'real roots', 'imaginary roots', 'two solutions',
-        'plus or minus', 'square root', 'formula', 'factoring'
+        // Core terms
+        'quadratic', 'equation', 'equations', 'squared', 'square', 'x squared', 'x square',
+        'ax squared', 'ax2', 'bx', 'cx', 'polynomial', 'degree', 'second degree',
+        // Methods & concepts
+        'factorization', 'factorisation', 'factoring', 'factor', 'factors', 'roots', 'root',
+        'discriminant', 'quadratic formula', 'formula', 'parabola', 'vertex', 'vertices',
+        'coefficient', 'coefficients', 'variable', 'variables', 'constant', 'term', 'terms',
+        // Solving
+        'completing the square', 'standard form', 'general form', 'find x', 'solve', 'solving',
+        'solve for x', 'value of x', 'solution', 'solutions', 'answer', 'calculate',
+        // Roots related
+        'roots of equation', 'sum of roots', 'product of roots', 'nature of roots',
+        'real roots', 'imaginary roots', 'complex roots', 'equal roots', 'distinct roots',
+        'two solutions', 'two roots', 'double root', 'repeated root',
+        // Formula terms
+        'plus or minus', 'plus minus', 'square root', 'sqrt', 'b squared', 'b square',
+        'four ac', '4ac', 'minus b', 'negative b', '2a', 'divided by',
+        // Graph related
+        'graph', 'curve', 'u shape', 'opening', 'upward', 'downward', 'axis of symmetry',
+        'maximum', 'minimum', 'turning point', 'intercept', 'x intercept', 'y intercept',
+        // Common words in teaching
+        'substitute', 'substitution', 'simplify', 'expand', 'rearrange', 'compare',
+        'positive', 'negative', 'zero', 'equal', 'equals', 'greater', 'less'
       ],
       'linear equations': [
-        'linear', 'straight line', 'slope', 'intercept', 'gradient',
-        'y equals mx', 'coordinate', 'parallel', 'perpendicular'
+        'linear', 'line', 'straight', 'straight line', 'slope', 'gradient', 'steepness',
+        'intercept', 'y intercept', 'x intercept', 'mx plus b', 'y equals mx', 'y equals',
+        'coordinate', 'coordinates', 'point', 'points', 'origin', 'axes', 'axis',
+        'parallel', 'perpendicular', 'horizontal', 'vertical', 'rise', 'run',
+        'rise over run', 'rate of change', 'constant', 'variable', 'first degree',
+        'graph', 'plot', 'plotting', 'table', 'ordered pair', 'x value', 'y value',
+        'slope intercept', 'point slope', 'standard form', 'equation of line',
+        'find the equation', 'find slope', 'simultaneous', 'system of equations'
       ],
       'trigonometry': [
-        'sine', 'cosine', 'tangent', 'sin', 'cos', 'tan', 'theta',
-        'hypotenuse', 'opposite', 'adjacent', 'trigonometric', 'angle'
+        'sine', 'cosine', 'tangent', 'sin', 'cos', 'tan', 'secant', 'cosecant', 'cotangent',
+        'sec', 'csc', 'cot', 'theta', 'angle', 'angles', 'degree', 'degrees', 'radian', 'radians',
+        'triangle', 'right triangle', 'right angle', 'hypotenuse', 'opposite', 'adjacent',
+        'soh cah toa', 'ratio', 'ratios', 'trigonometric', 'trig', 'identity', 'identities',
+        'pythagoras', 'pythagorean', 'unit circle', 'reference angle', 'quadrant',
+        'amplitude', 'period', 'frequency', 'phase', 'wave', 'oscillation',
+        'inverse', 'arc', 'arcsin', 'arccos', 'arctan', 'elevation', 'depression'
       ],
+      'algebra': [
+        'variable', 'variables', 'expression', 'expressions', 'equation', 'equations',
+        'polynomial', 'polynomials', 'monomial', 'binomial', 'trinomial', 'term', 'terms',
+        'coefficient', 'constant', 'like terms', 'unlike terms', 'degree', 'exponent',
+        'power', 'base', 'factor', 'factors', 'factoring', 'factorization', 'expand',
+        'simplify', 'simplifying', 'solve', 'solving', 'substitute', 'substitution',
+        'inequality', 'inequalities', 'greater than', 'less than', 'equal to',
+        'algebraic', 'formula', 'identity', 'evaluate', 'value', 'unknown'
+      ],
+      'geometry': [
+        'angle', 'angles', 'triangle', 'triangles', 'circle', 'circles', 'square', 'squares',
+        'rectangle', 'rectangles', 'polygon', 'polygons', 'line', 'lines', 'point', 'points',
+        'area', 'perimeter', 'volume', 'surface area', 'circumference', 'diameter', 'radius',
+        'congruent', 'similar', 'parallel', 'perpendicular', 'vertex', 'vertices', 'edge',
+        'face', 'side', 'sides', 'base', 'height', 'length', 'width', 'diagonal',
+        'acute', 'obtuse', 'right angle', 'straight angle', 'reflex', 'complementary', 'supplementary',
+        'isosceles', 'equilateral', 'scalene', 'quadrilateral', 'pentagon', 'hexagon'
+      ],
+      'calculus': [
+        'derivative', 'derivatives', 'differentiation', 'differentiate', 'integral', 'integration',
+        'integrate', 'limit', 'limits', 'function', 'functions', 'continuous', 'continuity',
+        'slope', 'tangent', 'rate of change', 'instantaneous', 'average', 'curve',
+        'maximum', 'minimum', 'critical point', 'inflection', 'concave', 'convex',
+        'chain rule', 'product rule', 'quotient rule', 'power rule', 'antiderivative',
+        'area under curve', 'definite', 'indefinite', 'bounds', 'fundamental theorem'
+      ],
+      'statistics': [
+        'mean', 'median', 'mode', 'average', 'range', 'variance', 'standard deviation',
+        'data', 'dataset', 'frequency', 'distribution', 'normal', 'bell curve',
+        'probability', 'chance', 'likelihood', 'sample', 'population', 'random',
+        'hypothesis', 'correlation', 'regression', 'scatter', 'outlier', 'quartile',
+        'percentile', 'histogram', 'bar graph', 'pie chart', 'survey', 'bias'
+      ],
+
+      // SCIENCE TOPICS
       'photosynthesis': [
-        'chlorophyll', 'sunlight', 'carbon dioxide', 'oxygen', 'glucose',
-        'chloroplast', 'stomata', 'plant', 'photosynthesis', 'leaves'
+        'photosynthesis', 'chlorophyll', 'chloroplast', 'sunlight', 'light', 'sun',
+        'carbon dioxide', 'co2', 'oxygen', 'o2', 'glucose', 'sugar', 'starch',
+        'plant', 'plants', 'leaf', 'leaves', 'green', 'pigment', 'stomata', 'stoma',
+        'water', 'h2o', 'energy', 'food', 'absorb', 'release', 'produce',
+        'light reaction', 'dark reaction', 'calvin cycle', 'atp', 'nadph',
+        'autotroph', 'producer', 'equation', 'process', 'convert', 'conversion'
+      ],
+      'newton': [
+        'newton', 'force', 'forces', 'mass', 'acceleration', 'velocity', 'speed',
+        'motion', 'movement', 'inertia', 'momentum', 'friction', 'gravity', 'weight',
+        'action', 'reaction', 'equal', 'opposite', 'first law', 'second law', 'third law',
+        'f equals ma', 'f ma', 'net force', 'unbalanced', 'balanced', 'equilibrium',
+        'push', 'pull', 'newton meter', 'kilogram', 'kg', 'acceleration due to gravity',
+        'free fall', 'projectile', 'rest', 'uniform', 'non uniform'
+      ],
+      'atoms': [
+        'atom', 'atoms', 'atomic', 'electron', 'electrons', 'proton', 'protons',
+        'neutron', 'neutrons', 'nucleus', 'shell', 'orbit', 'orbital', 'energy level',
+        'element', 'elements', 'periodic table', 'atomic number', 'mass number',
+        'isotope', 'isotopes', 'ion', 'ions', 'charge', 'positive', 'negative',
+        'valence', 'valency', 'bond', 'bonding', 'molecule', 'molecules', 'compound',
+        'subatomic', 'particle', 'particles', 'structure', 'model', 'bohr'
+      ],
+      'chemical reactions': [
+        'reaction', 'reactions', 'chemical', 'chemistry', 'reactant', 'reactants',
+        'product', 'products', 'equation', 'balance', 'balanced', 'catalyst',
+        'acid', 'base', 'salt', 'neutral', 'ph', 'indicator', 'litmus',
+        'oxidation', 'reduction', 'redox', 'exothermic', 'endothermic', 'energy',
+        'combustion', 'burning', 'synthesis', 'decomposition', 'displacement',
+        'precipitate', 'gas', 'fizz', 'bubble', 'color change', 'temperature'
+      ],
+      'electricity': [
+        'electric', 'electricity', 'current', 'voltage', 'resistance', 'ohm',
+        'circuit', 'circuits', 'conductor', 'insulator', 'wire', 'wires',
+        'battery', 'cell', 'switch', 'bulb', 'led', 'ampere', 'amp', 'volt', 'watt',
+        'series', 'parallel', 'electron', 'flow', 'charge', 'positive', 'negative',
+        'ohms law', 'v equals ir', 'power', 'energy', 'joule', 'kilowatt',
+        'fuse', 'ground', 'earthing', 'short circuit', 'open circuit'
+      ],
+      'biology': [
+        'cell', 'cells', 'organism', 'living', 'life', 'biology', 'biological',
+        'tissue', 'organ', 'system', 'body', 'function', 'structure',
+        'dna', 'gene', 'genes', 'chromosome', 'heredity', 'genetics', 'trait',
+        'species', 'evolution', 'adapt', 'adaptation', 'natural selection',
+        'ecosystem', 'habitat', 'environment', 'food chain', 'predator', 'prey'
+      ],
+
+      // ENGLISH/LANGUAGE TOPICS  
+      'grammar': [
+        'grammar', 'noun', 'nouns', 'verb', 'verbs', 'adjective', 'adjectives',
+        'adverb', 'adverbs', 'pronoun', 'pronouns', 'preposition', 'prepositions',
+        'conjunction', 'conjunctions', 'article', 'articles', 'interjection',
+        'sentence', 'sentences', 'clause', 'clauses', 'phrase', 'phrases',
+        'subject', 'predicate', 'object', 'tense', 'tenses', 'past', 'present', 'future',
+        'singular', 'plural', 'punctuation', 'comma', 'period', 'question mark',
+        'active voice', 'passive voice', 'direct', 'indirect', 'speech'
+      ],
+      'literature': [
+        'literature', 'story', 'stories', 'poem', 'poems', 'poetry', 'novel', 'novels',
+        'character', 'characters', 'plot', 'setting', 'theme', 'themes', 'conflict',
+        'protagonist', 'antagonist', 'narrator', 'narration', 'point of view',
+        'metaphor', 'simile', 'imagery', 'symbolism', 'symbol', 'foreshadowing',
+        'irony', 'personification', 'alliteration', 'rhyme', 'rhythm', 'stanza',
+        'author', 'writer', 'reader', 'audience', 'tone', 'mood', 'style'
+      ],
+
+      // HISTORY TOPICS
+      'independence': [
+        'independence', 'freedom', 'liberty', 'struggle', 'movement', 'revolution',
+        'british', 'colonial', 'colony', 'rule', 'raj', 'empire',
+        'gandhi', 'nehru', 'patel', 'bose', 'azad', 'tilak', 'gokhale',
+        'salt march', 'dandi', 'quit india', 'non cooperation', 'civil disobedience',
+        'satyagraha', 'ahimsa', 'swadeshi', 'boycott', 'partition', '1947',
+        'congress', 'league', 'constituent assembly', 'constitution'
+      ],
+      'world wars': [
+        'war', 'wars', 'world war', 'battle', 'battles', 'military', 'army', 'navy',
+        'soldier', 'soldiers', 'weapon', 'weapons', 'attack', 'defense', 'defence',
+        'alliance', 'allies', 'axis', 'treaty', 'peace', 'victory', 'defeat',
+        'hitler', 'nazi', 'holocaust', 'atomic', 'nuclear', 'hiroshima', 'nagasaki',
+        'trench', 'warfare', 'front', 'casualties', 'surrender', 'occupation'
+      ],
+
+      // COMPUTER SCIENCE
+      'programming': [
+        'program', 'programming', 'code', 'coding', 'computer', 'software',
+        'variable', 'variables', 'function', 'functions', 'loop', 'loops',
+        'condition', 'conditional', 'if', 'else', 'while', 'for', 'array', 'arrays',
+        'string', 'integer', 'boolean', 'data type', 'input', 'output', 'print',
+        'algorithm', 'logic', 'debug', 'error', 'bug', 'compile', 'run', 'execute',
+        'syntax', 'statement', 'expression', 'operator', 'class', 'object'
       ]
     };
     
-    // Find matching keywords
+    // Find matching keywords - check for partial matches too
     const topicLower = this.currentTopic.toLowerCase();
     for (const [topic, keywords] of Object.entries(topicKeywords)) {
-      if (topicLower.includes(topic) || topic.includes(topicLower)) {
+      if (topicLower.includes(topic) || topic.includes(topicLower) || 
+          topic.split(' ').some(word => topicLower.includes(word))) {
         return keywords;
       }
     }
     
-    // Fallback - generate from topic name
-    return this.currentTopic.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    // Fallback - generate from topic name and add common teaching words
+    const topicWords = this.currentTopic.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    return [...topicWords, 'example', 'problem', 'solution', 'answer', 'find', 'calculate', 'solve'];
   }
 
   // Run Gemini AI analysis for better accuracy
