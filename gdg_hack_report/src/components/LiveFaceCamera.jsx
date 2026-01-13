@@ -321,19 +321,6 @@ const LiveFaceCamera = ({ onAttendanceUpdate }) => {
                   </div>
                 </div>
               )}
-                      {detectedFaces.length}
-                    </span>
-                    <span className="text-gray-300">faces</span>
-                  </div>
-                  <div className="bg-black/80 backdrop-blur-md px-4 py-3 rounded-xl flex items-center gap-3 shadow-lg">
-                    <UserCheck className="w-5 h-5 text-green-400" />
-                    <span className="text-white text-lg font-bold">
-                      {stats.present}
-                    </span>
-                    <span className="text-gray-300">present</span>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Detected Faces List - ENHANCED */}
