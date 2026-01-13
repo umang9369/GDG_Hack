@@ -355,6 +355,12 @@ class FaceRecognitionService {
         const detection = resizedDetections[i];
         const rawBox = detection.detection.box;
         
+        // FIXED: Extract actual values from face-api box object
+        const boxX = rawBox.x;
+        const boxY = rawBox.y;
+        const boxWidth = rawBox.width;
+        const boxHeight = rawBox.height;
+        
         let matchResult = {
           name: 'Unknown',
           studentId: null,
@@ -395,7 +401,7 @@ class FaceRecognitionService {
         }
 
         // SMOOTHING: Create a unique ID for this face based on position or studentId
-        const faceKey = matchResult.studentId || `face_${i}_${Math.round(rawBox.x / 50)}`;
+        const faceKey = matchResult.studentId || `face_${i}_${Math.round(boxX / 50)}`;
         currentFaceIds.add(faceKey);
         
         // Get or create smoothed position
@@ -404,14 +410,14 @@ class FaceRecognitionService {
           const prev = this.previousFaces.get(faceKey);
           // Lerp (linear interpolation) between previous and current position
           smoothedBox = {
-            x: prev.x + (rawBox.x - prev.x) * this.smoothingFactor,
-            y: prev.y + (rawBox.y - prev.y) * this.smoothingFactor,
-            width: prev.width + (rawBox.width - prev.width) * this.smoothingFactor,
-            height: prev.height + (rawBox.height - prev.height) * this.smoothingFactor
+            x: prev.x + (boxX - prev.x) * this.smoothingFactor,
+            y: prev.y + (boxY - prev.y) * this.smoothingFactor,
+            width: prev.width + (boxWidth - prev.width) * this.smoothingFactor,
+            height: prev.height + (boxHeight - prev.height) * this.smoothingFactor
           };
         } else {
           // First detection - use raw values
-          smoothedBox = { ...rawBox };
+          smoothedBox = { x: boxX, y: boxY, width: boxWidth, height: boxHeight };
         }
         
         // Store smoothed position for next frame
