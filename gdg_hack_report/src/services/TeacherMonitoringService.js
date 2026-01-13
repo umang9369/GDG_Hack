@@ -38,21 +38,21 @@ class TeacherMonitoringService {
     this.lastPhraseTime = Date.now();
     this.continuousScores = []; // Track scores over time for graphing
     
-    // ENHANCED: Teaching quality metrics with real-time updates
+    // ENHANCED: Teaching quality metrics - START AT 50 (neutral) and adjust based on content
     this.teachingMetrics = {
-      clarity: 70,
-      engagement: 70,
-      pacing: 70,
-      exampleUsage: 70,
-      questionAsking: 70,
-      contentAccuracy: 70,
-      studentInteraction: 70,
-      conceptExplanation: 70
+      clarity: 50,
+      engagement: 50,
+      pacing: 50,
+      exampleUsage: 50,
+      questionAsking: 50,
+      contentAccuracy: 50,
+      studentInteraction: 50,
+      conceptExplanation: 50
     };
     
-    // Real-time teaching effectiveness
+    // Real-time teaching effectiveness - START AT 50 (neutral)
     this.teachingEffectiveness = {
-      overallScore: 70,
+      overallScore: 50,
       trend: 'stable', // 'improving', 'declining', 'stable'
       recentScores: [],
       suggestions: [],
@@ -559,19 +559,22 @@ class TeacherMonitoringService {
     const hasExample = exampleIndicators.some(e => textLower.includes(e));
     const hasClarity = clarityIndicators.some(c => textLower.includes(c));
     
-    // Update teaching metrics
+    // Update teaching metrics SIGNIFICANTLY when good teaching behaviors detected
     if (hasQuestion) {
       this.questionCount++;
-      this.teachingMetrics.questionAsking = Math.min(100, this.teachingMetrics.questionAsking + 5);
-      this.teachingMetrics.engagement = Math.min(100, this.teachingMetrics.engagement + 3);
+      this.teachingMetrics.questionAsking = Math.min(100, this.teachingMetrics.questionAsking + 10);
+      this.teachingMetrics.engagement = Math.min(100, this.teachingMetrics.engagement + 8);
+      this.teachingMetrics.studentInteraction = Math.min(100, this.teachingMetrics.studentInteraction + 5);
     }
     if (hasExample) {
       this.exampleCount++;
-      this.teachingMetrics.exampleUsage = Math.min(100, this.teachingMetrics.exampleUsage + 6);
-      this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 3);
+      this.teachingMetrics.exampleUsage = Math.min(100, this.teachingMetrics.exampleUsage + 12);
+      this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 6);
+      this.teachingMetrics.conceptExplanation = Math.min(100, this.teachingMetrics.conceptExplanation + 5);
     }
     if (hasClarity) {
-      this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 3);
+      this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 5);
+      this.teachingMetrics.conceptExplanation = Math.min(100, this.teachingMetrics.conceptExplanation + 3);
     }
 
     // Add to analysis buffer for context
@@ -600,8 +603,24 @@ class TeacherMonitoringService {
       confidence = localAnalysis.confidence;
     }
     
+    // DYNAMIC: Update teaching metrics based on ACTUAL analysis
+    if (isOnTopic) {
+      // Good on-topic content improves metrics
+      this.teachingMetrics.contentAccuracy = Math.min(100, this.teachingMetrics.contentAccuracy + 3);
+      this.teachingMetrics.conceptExplanation = Math.min(100, this.teachingMetrics.conceptExplanation + 2);
+      this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 2);
+      if (matchedKeywords.length > 0) {
+        this.teachingMetrics.contentAccuracy = Math.min(100, this.teachingMetrics.contentAccuracy + matchedKeywords.length);
+      }
+    } else {
+      // Off-topic content decreases metrics
+      this.teachingMetrics.contentAccuracy = Math.max(0, this.teachingMetrics.contentAccuracy - 5);
+      this.teachingMetrics.conceptExplanation = Math.max(0, this.teachingMetrics.conceptExplanation - 3);
+      this.teachingMetrics.clarity = Math.max(0, this.teachingMetrics.clarity - 2);
+    }
+    
     // Calculate segment score
-    let segmentScore = isOnTopic ? 70 + (confidence * 30) : 30;
+    let segmentScore = isOnTopic ? 60 + (confidence * 40) : 20 + (confidence * 20);
     segmentScore += hasQuestion ? 5 : 0;
     segmentScore += hasExample ? 5 : 0;
     segmentScore = Math.min(100, Math.max(0, segmentScore));
@@ -1467,32 +1486,51 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
     };
   }
 
-  // Calculate grade - BALANCED formula
+  // Calculate grade - STRICT formula based on ACTUAL content
   calculateGrade(analysis) {
-    // Base score from on-topic percentage (40% weight)
-    const topicScore = (analysis.onTopicPercentage / 100) * 40;
+    // PRIMARY: On-topic percentage is the main factor (50% weight)
+    const onTopicPercent = analysis.onTopicPercentage || 0;
+    const topicScore = (onTopicPercent / 100) * 50;
     
-    // Teaching metrics average (30% weight)
-    const metricsAvg = Object.values(analysis.teachingMetrics).reduce((a, b) => a + b, 0) / 5;
-    const metricsScore = (metricsAvg / 100) * 30;
+    // SECONDARY: Content quality - questions and examples (25% weight)
+    const questionsScore = Math.min(10, analysis.questionsAsked * 3);
+    const examplesScore = Math.min(10, analysis.examplesGiven * 4);
+    const keywordsUsed = analysis.recentKeywords?.length || 0;
+    const keywordsScore = Math.min(5, keywordsUsed * 1);
+    const contentScore = questionsScore + examplesScore + keywordsScore;
     
-    // Engagement bonus (20% weight) - questions and examples
-    const engagementRaw = Math.min(20, (analysis.questionsAsked * 3) + (analysis.examplesGiven * 4));
-    const engagementScore = engagementRaw;
+    // TERTIARY: Teaching metrics average (15% weight) - only use relevant ones
+    const relevantMetrics = [
+      analysis.teachingMetrics?.clarity || 50,
+      analysis.teachingMetrics?.engagement || 50,
+      analysis.teachingMetrics?.exampleUsage || 50
+    ];
+    const metricsAvg = relevantMetrics.reduce((a, b) => a + b, 0) / relevantMetrics.length;
+    const metricsScore = (metricsAvg / 100) * 15;
     
-    // Duration/effort bonus (10% weight)
-    const durationBonus = Math.min(10, analysis.totalDuration * 0.5);
+    // BONUS: Duration shows effort (10% weight, max 10 points)
+    const durationBonus = Math.min(10, (analysis.totalDuration || 0) * 1);
     
-    const finalScore = topicScore + metricsScore + engagementScore + durationBonus;
+    // Calculate final score
+    let finalScore = topicScore + contentScore + metricsScore + durationBonus;
     
-    // Grade thresholds - more lenient
-    if (finalScore >= 80) return 'A+';
-    if (finalScore >= 70) return 'A';
-    if (finalScore >= 60) return 'B+';
-    if (finalScore >= 50) return 'B';
-    if (finalScore >= 40) return 'C+';
-    if (finalScore >= 30) return 'C';
-    if (finalScore >= 20) return 'D';
+    // PENALTY for high off-topic content
+    if (onTopicPercent < 30) {
+      finalScore = finalScore * 0.6; // Heavy penalty for mostly off-topic
+    } else if (onTopicPercent < 50) {
+      finalScore = finalScore * 0.8; // Moderate penalty
+    }
+    
+    console.log(`📊 Grade Calculation: topic=${topicScore.toFixed(1)}, content=${contentScore.toFixed(1)}, metrics=${metricsScore.toFixed(1)}, duration=${durationBonus.toFixed(1)} => ${finalScore.toFixed(1)}`);
+    
+    // Grade thresholds - STRICT
+    if (finalScore >= 90) return 'A+';
+    if (finalScore >= 80) return 'A';
+    if (finalScore >= 70) return 'B+';
+    if (finalScore >= 60) return 'B';
+    if (finalScore >= 50) return 'C+';
+    if (finalScore >= 40) return 'C';
+    if (finalScore >= 30) return 'D';
     return 'F';
   }
 
