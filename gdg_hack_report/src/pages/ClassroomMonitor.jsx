@@ -463,6 +463,49 @@ const TeacherMonitoringPanel = ({ topic, subject, onReportUpdate, teacherInfo })
             </div>
           </div>
           
+          {/* ENHANCED: Real-time Teaching Effectiveness Score */}
+          {analysis.cumulativeScore !== undefined && (
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 rounded-lg text-white mt-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-indigo-200">Real-time Teaching Score</p>
+                  <p className="text-3xl font-bold">{analysis.cumulativeScore || 0}%</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-indigo-200">Trend</p>
+                  <p className={`text-lg font-semibold ${
+                    analysis.trend === 'improving' ? 'text-green-300' :
+                    analysis.trend === 'declining' ? 'text-red-300' : 'text-gray-300'
+                  }`}>
+                    {analysis.trend === 'improving' ? '📈 Improving' :
+                     analysis.trend === 'declining' ? '📉 Declining' : '➡️ Stable'}
+                  </p>
+                </div>
+              </div>
+              {/* Mini score chart */}
+              <div className="flex items-end gap-1 mt-2 h-8">
+                {(analysis.recentTrend || []).slice(-15).map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex-1 rounded-t ${item.isOnTopic ? 'bg-green-400' : 'bg-red-400'}`}
+                    style={{ height: `${Math.max(10, item.score * 0.8)}%` }}
+                    title={`Score: ${item.score}`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* ENHANCED: Live Suggestion Box */}
+          {liveStatus?.suggestion && (
+            <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg mt-2">
+              <p className="text-amber-800 text-sm flex items-center">
+                <span className="mr-2">💡</span>
+                <strong>Suggestion:</strong> {liveStatus.suggestion}
+              </p>
+            </div>
+          )}
+          
           {/* Enhanced Teaching Metrics */}
           {analysis.teachingMetrics && (
             <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-3 rounded-lg mt-3">

@@ -1,8 +1,8 @@
-// StudentPhotoUpload.jsx - Upload and register student photos
+// StudentPhotoUpload.jsx - ENHANCED Upload and register student photos with face detection
 import React, { useState, useRef, useCallback } from 'react';
 import { 
   Upload, Camera, User, X, Check, Loader, 
-  Image, UserPlus, AlertCircle, CheckCircle
+  Image, UserPlus, AlertCircle, CheckCircle, Scan
 } from 'lucide-react';
 import { faceRecognitionService } from '../services/FaceRecognitionService';
 import { faceDatabase } from '../services/FaceDatabase';
@@ -19,14 +19,19 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   
+  // ENHANCED: Face detection states
+  const [faceDetected, setFaceDetected] = useState(false);
+  const [isDetectingFace, setIsDetectingFace] = useState(false);
+  const [faceDetectionStatus, setFaceDetectionStatus] = useState(null);
+  
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isCameraMode, setIsCameraMode] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
 
-  // Handle file upload
-  const handleFileUpload = useCallback((event) => {
+  // ENHANCED: Handle file upload with face detection
+  const handleFileUpload = useCallback(async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -36,9 +41,35 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
-      setPhotoData(e.target.result);
+    reader.onload = async (e) => {
+      const dataUrl = e.target.result;
+      setPhotoData(dataUrl);
       setError(null);
+      
+      // ENHANCED: Auto-detect face in uploaded photo
+      setIsDetectingFace(true);
+      setFaceDetectionStatus('Analyzing photo for face...');
+      
+      try {
+        // Make sure models are loaded
+        await faceRecognitionService.loadModels();
+        
+        const descriptor = await faceRecognitionService.extractFaceDescriptorFromDataUrl(dataUrl);
+        
+        if (descriptor) {
+          setFaceDetected(true);
+          setFaceDetectionStatus('✅ Face detected! Ready to register.');
+        } else {
+          setFaceDetected(false);
+          setFaceDetectionStatus('⚠️ No face detected. Please upload a clear photo of the face.');
+        }
+      } catch (err) {
+        console.error('Face detection error:', err);
+        setFaceDetected(false);
+        setFaceDetectionStatus('Face detection unavailable - photo will still be saved.');
+      }
+      
+      setIsDetectingFace(false);
     };
     reader.readAsDataURL(file);
   }, []);
@@ -72,8 +103,8 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
     setIsCameraMode(false);
   };
 
-  // Capture photo from camera
-  const capturePhoto = () => {
+  // ENHANCED: Capture photo from camera with face detection
+  const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
@@ -89,9 +120,31 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
     setPhotoData(dataUrl);
     stopCamera();
     setError(null);
+    
+    // ENHANCED: Auto-detect face in captured photo
+    setIsDetectingFace(true);
+    setFaceDetectionStatus('Analyzing captured photo...');
+    
+    try {
+      await faceRecognitionService.loadModels();
+      const descriptor = await faceRecognitionService.extractFaceDescriptorFromDataUrl(dataUrl);
+      
+      if (descriptor) {
+        setFaceDetected(true);
+        setFaceDetectionStatus('✅ Face detected! Ready to register.');
+      } else {
+        setFaceDetected(false);
+        setFaceDetectionStatus('⚠️ No face detected. Try capturing again with better lighting.');
+      }
+    } catch (err) {
+      setFaceDetected(false);
+      setFaceDetectionStatus('Face detection unavailable - photo will still be saved.');
+    }
+    
+    setIsDetectingFace(false);
   };
 
-  // Register student
+  // ENHANCED: Register student with face descriptor
   const handleRegister = async () => {
     if (!studentInfo.name.trim()) {
       setError('Please enter student name');
@@ -107,7 +160,7 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
     setError(null);
 
     try {
-      // Add student with photo
+      // ENHANCED: Add student with photo - face descriptor will be extracted automatically
       const student = await faceRecognitionService.addNewStudent(
         studentInfo.name,
         studentInfo.grade,
@@ -126,6 +179,8 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
         setPhotoData(null);
         setStep(1);
         setSuccess(false);
+        setFaceDetected(false);
+        setFaceDetectionStatus(null);
         if (onClose) onClose();
       }, 2000);
 
@@ -139,6 +194,8 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
   // Clear photo
   const clearPhoto = () => {
     setPhotoData(null);
+    setFaceDetected(false);
+    setFaceDetectionStatus(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -247,7 +304,7 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
         </div>
       )}
 
-      {/* Step 2: Photo Upload/Capture */}
+      {/* Step 2: Photo Upload/Capture - ENHANCED with face detection status */}
       {step === 2 && (
         <div className="space-y-4">
           {/* Photo Preview */}
@@ -265,6 +322,32 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
                 >
                   <X className="w-5 h-5" />
                 </button>
+                
+                {/* ENHANCED: Face detection indicator overlay */}
+                {isDetectingFace && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <div className="text-center">
+                      <Loader className="w-12 h-12 text-blue-400 animate-spin mx-auto mb-2" />
+                      <p className="text-white">Detecting face...</p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Face detected indicator */}
+                {!isDetectingFace && faceDetected && (
+                  <div className="absolute bottom-2 left-2 right-2 bg-green-500/90 rounded-lg p-2 flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-white" />
+                    <span className="text-white text-sm font-medium">Face detected</span>
+                  </div>
+                )}
+                
+                {/* No face detected warning */}
+                {!isDetectingFace && photoData && !faceDetected && faceDetectionStatus && (
+                  <div className="absolute bottom-2 left-2 right-2 bg-yellow-500/90 rounded-lg p-2 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-white" />
+                    <span className="text-white text-sm font-medium">No face detected</span>
+                  </div>
+                )}
               </>
             ) : isCameraMode ? (
               <>
@@ -275,6 +358,14 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
                   muted
                 />
                 <canvas ref={canvasRef} className="hidden" />
+                
+                {/* Camera guide overlay */}
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute inset-8 border-2 border-dashed border-white/50 rounded-full"></div>
+                  <p className="absolute bottom-4 left-0 right-0 text-center text-white text-sm bg-black/50 py-1">
+                    Position face within the circle
+                  </p>
+                </div>
               </>
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center">
@@ -282,9 +373,30 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
                 <p className="text-gray-400 text-center px-4">
                   Upload a clear photo of the student's face
                 </p>
+                <p className="text-gray-500 text-sm text-center px-4 mt-2">
+                  Face will be automatically detected for attendance
+                </p>
               </div>
             )}
           </div>
+
+          {/* ENHANCED: Face detection status message */}
+          {faceDetectionStatus && !isDetectingFace && (
+            <div className={`p-3 rounded-lg flex items-center gap-2 ${
+              faceDetected 
+                ? 'bg-green-500/20 border border-green-500/30' 
+                : 'bg-yellow-500/20 border border-yellow-500/30'
+            }`}>
+              {faceDetected ? (
+                <CheckCircle className="w-5 h-5 text-green-400" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-yellow-400" />
+              )}
+              <span className={faceDetected ? 'text-green-400' : 'text-yellow-400'}>
+                {faceDetectionStatus}
+              </span>
+            </div>
+          )}
 
           {/* Photo Actions */}
           {!photoData && (
@@ -346,18 +458,24 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
         </div>
       )}
 
-      {/* Step 3: Confirm */}
+      {/* Step 3: Confirm - ENHANCED with face detection status */}
       {step === 3 && (
         <div className="space-y-4">
           {/* Preview Card */}
           <div className="bg-gray-700 rounded-xl p-4">
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
+              <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 relative">
                 <img
                   src={photoData}
                   alt="Student"
                   className="w-full h-full object-cover"
                 />
+                {/* Face detection badge */}
+                {faceDetected && (
+                  <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1">
+                    <CheckCircle className="w-4 h-4 text-white" />
+                  </div>
+                )}
               </div>
               <div>
                 <h4 className="text-white font-bold text-lg">{studentInfo.name}</h4>
@@ -365,14 +483,39 @@ const StudentPhotoUpload = ({ onStudentAdded, onClose }) => {
                 {studentInfo.email && (
                   <p className="text-gray-400 text-sm">{studentInfo.email}</p>
                 )}
+                {/* Face status indicator */}
+                <div className={`flex items-center gap-1 mt-1 text-sm ${faceDetected ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {faceDetected ? (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Face ready for recognition</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="w-4 h-4" />
+                      <span>Face not detected</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-            <p className="text-blue-400 text-sm">
-              <strong>Note:</strong> The face will be registered and used for automatic 
-              attendance tracking. Make sure the photo clearly shows the student's face.
+          <div className={`p-4 rounded-xl ${faceDetected ? 'bg-green-500/10 border border-green-500/30' : 'bg-yellow-500/10 border border-yellow-500/30'}`}>
+            <p className={`text-sm ${faceDetected ? 'text-green-400' : 'text-yellow-400'}`}>
+              {faceDetected ? (
+                <>
+                  <strong>✅ Ready for Live Recognition:</strong> Face has been detected and will be used for 
+                  automatic attendance tracking. When the student appears on camera, they will be 
+                  identified with their name displayed above their head.
+                </>
+              ) : (
+                <>
+                  <strong>⚠️ Note:</strong> No face was detected in the photo. The student will be registered 
+                  but you may need to add another photo later for face recognition to work. 
+                  Make sure the photo clearly shows the face.
+                </>
+              )}
             </p>
           </div>
 

@@ -1,5 +1,5 @@
 // Enhanced Teacher Monitoring Service - LIVE Speech Recognition
-// Real-time analysis with Gemini AI for accurate topic detection
+// Real-time phrase-by-phrase analysis with Gemini AI for accurate topic detection
 
 import { geminiAnalysisService } from './GeminiAnalysisService';
 
@@ -28,12 +28,36 @@ class TeacherMonitoringService {
     this.pendingAnalysis = null; // For async AI analysis
     this.analysisBuffer = ''; // Buffer for batching analysis
     this.lastAnalysisTime = 0;
+    
+    // ENHANCED: Real-time phrase analysis
+    this.phraseBuffer = '';
+    this.phraseHistory = []; // Store all analyzed phrases
+    this.streamingAnalysis = true; // Enable continuous streaming analysis
+    this.analysisQueue = []; // Queue for parallel analysis
+    this.isAnalyzing = false;
+    this.lastPhraseTime = Date.now();
+    this.continuousScores = []; // Track scores over time for graphing
+    
+    // ENHANCED: Teaching quality metrics with real-time updates
     this.teachingMetrics = {
       clarity: 70,
       engagement: 70,
       pacing: 70,
       exampleUsage: 70,
-      questionAsking: 70
+      questionAsking: 70,
+      contentAccuracy: 70,
+      studentInteraction: 70,
+      conceptExplanation: 70
+    };
+    
+    // Real-time teaching effectiveness
+    this.teachingEffectiveness = {
+      overallScore: 70,
+      trend: 'stable', // 'improving', 'declining', 'stable'
+      recentScores: [],
+      suggestions: [],
+      strengths: [],
+      improvements: []
     };
     
     // Callbacks
@@ -184,7 +208,7 @@ class TeacherMonitoringService {
     }
   }
 
-  // Initialize speech recognition - REAL microphone capture
+  // Initialize speech recognition - REAL microphone capture with ENHANCED phrase-by-phrase analysis
   initSpeechRecognition() {
     this.loadCustomTopics();
     
@@ -205,45 +229,67 @@ class TeacherMonitoringService {
 
     this.recognition = new SpeechRecognition();
     
-    // Configure for continuous, real-time recognition
+    // Configure for continuous, real-time recognition - ENHANCED for phrase analysis
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
-    this.recognition.lang = 'en-US'; // Changed to en-US for better compatibility
+    this.recognition.lang = 'en-US';
     this.recognition.maxAlternatives = 1;
     
     // Track retry attempts
     this.retryCount = 0;
     this.maxRetries = 3;
     
-    // Handle speech results
+    // ENHANCED: Handle speech results with immediate phrase analysis
     this.recognition.onresult = (event) => {
-      this.retryCount = 0; // Reset retry count on successful result
+      this.retryCount = 0;
       let interimTranscript = '';
       let finalTranscript = '';
       
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         const transcript = result[0].transcript;
+        const confidence = result[0].confidence || 0.9;
         
         if (result.isFinal) {
           finalTranscript += transcript + ' ';
-          // Analyze final transcript (async but don't block)
-          this.analyzeSegment(transcript).then(analysis => {
+          
+          // ENHANCED: Immediate phrase-by-phrase analysis with detailed feedback
+          this.analyzePhraseImmediately(transcript, confidence).then(analysis => {
             if (analysis) {
-              // Update live status with reason
+              // Store phrase in history for tracking
+              this.phraseHistory.push({
+                text: transcript,
+                timestamp: new Date().toISOString(),
+                analysis: analysis,
+                confidence: confidence
+              });
+              
+              // ENHANCED: Update live status with comprehensive feedback
               if (this.onLiveStatus) {
                 this.onLiveStatus({
                   status: analysis.isOnTopic ? 'on-topic' : 'off-topic',
                   text: transcript,
-                  matchedKeywords: analysis.matchedKeywords || [],
-                  reason: analysis.reason || (analysis.isOnTopic ? 'Topic keywords detected' : 'No topic keywords found'),
-                  confidence: result[0].confidence || 0.9
+                  matchedKeywords: analysis.matchedKeywords || analysis.matchedConcepts || [],
+                  reason: analysis.reason || '',
+                  confidence: analysis.confidence || confidence,
+                  teachingQuality: analysis.teachingQuality || null,
+                  suggestion: analysis.suggestion || null,
+                  phraseScore: analysis.phraseScore || 0,
+                  cumulativeScore: this.calculateCumulativeScore()
                 });
               }
+              
+              // ENHANCED: Update teaching effectiveness in real-time
+              this.updateTeachingEffectiveness(analysis);
             }
-          }).catch(err => console.warn('Analysis error:', err));
+          }).catch(err => console.warn('Phrase analysis error:', err));
         } else {
           interimTranscript += transcript;
+          
+          // ENHANCED: Analyze interim results for faster feedback (debounced)
+          if (this.streamingAnalysis && transcript.length > 15) {
+            this.analyzeInterimDebounced(transcript);
+          }
         }
       }
       
@@ -802,6 +848,408 @@ Respond with JSON only (no markdown):
     return this.quickLocalAnalysis(text);
   }
 
+  // ENHANCED: Immediate phrase-by-phrase analysis for real-time feedback
+  async analyzePhraseImmediately(phrase, confidence = 0.9) {
+    const now = Date.now();
+    const timeSinceLastPhrase = (now - this.lastPhraseTime) / 1000;
+    this.lastPhraseTime = now;
+    
+    // Skip very short phrases
+    if (!phrase || phrase.trim().length < 5) {
+      return null;
+    }
+    
+    // First do quick local analysis for immediate feedback
+    const quickResult = this.quickLocalAnalysis(phrase);
+    
+    // Then get detailed AI analysis
+    const aiResult = await this.analyzeWithGeminiAIEnhanced(phrase);
+    
+    // Combine results - AI takes precedence if available
+    const finalResult = aiResult || quickResult;
+    
+    // ENHANCED: Calculate phrase-specific teaching quality score
+    const phraseScore = this.calculatePhraseTeachingScore(phrase, finalResult, timeSinceLastPhrase);
+    
+    // Track continuous scores for trending
+    this.continuousScores.push({
+      timestamp: now,
+      score: phraseScore,
+      isOnTopic: finalResult.isOnTopic
+    });
+    
+    // Keep only last 50 scores
+    if (this.continuousScores.length > 50) {
+      this.continuousScores.shift();
+    }
+    
+    return {
+      ...finalResult,
+      phraseScore,
+      teachingQuality: this.assessTeachingQuality(phrase),
+      suggestion: this.getImmediateSuggestion(phrase, finalResult),
+      speechConfidence: confidence
+    };
+  }
+
+  // ENHANCED: Debounced interim analysis for faster feedback
+  analyzeInterimDebounced(text) {
+    if (this.interimDebounceTimer) {
+      clearTimeout(this.interimDebounceTimer);
+    }
+    
+    this.interimDebounceTimer = setTimeout(() => {
+      const quickResult = this.quickLocalAnalysis(text);
+      if (this.onLiveStatus) {
+        this.onLiveStatus({
+          status: quickResult.isOnTopic ? 'on-topic' : 'off-topic',
+          text: text,
+          matchedKeywords: quickResult.matchedKeywords || [],
+          reason: quickResult.reason + ' (analyzing...)',
+          confidence: quickResult.confidence,
+          isInterim: true
+        });
+      }
+    }, 300); // 300ms debounce
+  }
+
+  // ENHANCED: AI analysis with detailed teaching quality assessment
+  async analyzeWithGeminiAIEnhanced(text) {
+    if (!text || text.trim().length < 5) {
+      return null;
+    }
+    
+    try {
+      const apiKey = 'AIzaSyBvLZ8yyM0tyW0t4LvVxE-C7V0u9Ghfqew';
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+      
+      const prompt = `You are an expert classroom teaching evaluator. Analyze this spoken phrase for teaching "${this.currentTopic}" in ${this.currentSubject}.
+
+PHRASE: "${text}"
+EXPECTED TOPIC: ${this.currentTopic}
+SUBJECT: ${this.currentSubject}
+
+Evaluate these aspects:
+1. Is this phrase on-topic (discussing the expected subject matter)?
+2. Teaching quality indicators (clarity, examples, questions, explanations)
+3. Any issues or suggestions for improvement
+
+CONTEXT RULES:
+- Teaching explanations in simple words = ON-TOPIC
+- Examples, analogies, real-world applications = ON-TOPIC with bonus
+- Asking students questions about topic = ON-TOPIC with bonus
+- Transitional phrases = ON-TOPIC (neutral)
+- Personal anecdotes unrelated to topic = OFF-TOPIC
+- Classroom management ("please be quiet") = OFF-TOPIC
+
+Respond with ONLY valid JSON (no markdown, no code blocks):
+{
+  "isOnTopic": true/false,
+  "confidence": 0.0-1.0,
+  "matchedConcepts": ["concept1", "concept2"],
+  "reason": "brief explanation",
+  "teachingIndicators": {
+    "usesExamples": true/false,
+    "asksQuestions": true/false,
+    "explainsWell": true/false,
+    "engagingDelivery": true/false
+  },
+  "suggestion": "optional brief improvement tip or null"
+}`;
+
+      const response = await fetch(`${apiUrl}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 200
+          }
+        })
+      });
+
+      if (!response.ok) {
+        console.warn('Gemini API error:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      
+      // Parse JSON response
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        console.log('🤖 Enhanced AI:', result.isOnTopic ? '✅ ON-TOPIC' : '❌ OFF-TOPIC', '-', result.reason);
+        
+        // Update teaching metrics based on AI indicators
+        if (result.teachingIndicators) {
+          this.updateTeachingMetricsFromAI(result.teachingIndicators);
+        }
+        
+        return result;
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn('Enhanced AI analysis error:', error.message);
+      return null;
+    }
+  }
+
+  // ENHANCED: Calculate phrase-specific teaching score
+  calculatePhraseTeachingScore(phrase, analysis, timeSinceLastPhrase) {
+    let score = 50; // Base score
+    
+    // On-topic bonus
+    if (analysis.isOnTopic) {
+      score += 20 + (analysis.confidence || 0.5) * 20;
+    } else {
+      score -= 20;
+    }
+    
+    const phraseLower = phrase.toLowerCase();
+    
+    // Teaching technique bonuses
+    const exampleWords = ['for example', 'example', 'such as', 'like this', 'consider', 'instance'];
+    if (exampleWords.some(w => phraseLower.includes(w))) {
+      score += 10;
+      this.exampleCount++;
+    }
+    
+    const questionIndicators = ['what', 'why', 'how', 'can you', 'do you', 'tell me', 'anyone'];
+    if (questionIndicators.some(q => phraseLower.includes(q)) && phraseLower.includes('?')) {
+      score += 8;
+      this.questionCount++;
+    }
+    
+    const clarityWords = ['because', 'therefore', 'so', 'this means', 'in other words', 'simply'];
+    if (clarityWords.some(c => phraseLower.includes(c))) {
+      score += 5;
+    }
+    
+    // Pacing penalty for very long pauses
+    if (timeSinceLastPhrase > 10) {
+      score -= 5;
+    }
+    
+    // Word count - penalize very short or very long phrases
+    const wordCount = phrase.split(/\s+/).length;
+    if (wordCount < 3) {
+      score -= 5;
+    } else if (wordCount > 50) {
+      score -= 3;
+    }
+    
+    return Math.max(0, Math.min(100, score));
+  }
+
+  // ENHANCED: Assess teaching quality from phrase content
+  assessTeachingQuality(phrase) {
+    const phraseLower = phrase.toLowerCase();
+    
+    return {
+      hasExample: ['example', 'for instance', 'such as', 'like this'].some(e => phraseLower.includes(e)),
+      hasQuestion: phraseLower.includes('?') || ['what', 'why', 'how'].some(q => phraseLower.startsWith(q)),
+      hasExplanation: ['because', 'therefore', 'means', 'so basically'].some(e => phraseLower.includes(e)),
+      hasEngagement: ['you', 'we', 'let us', "let's", 'together'].some(e => phraseLower.includes(e)),
+      hasClarity: ['simply', 'basically', 'in other words', 'remember'].some(c => phraseLower.includes(c))
+    };
+  }
+
+  // ENHANCED: Get immediate suggestion based on analysis
+  getImmediateSuggestion(phrase, analysis) {
+    if (!analysis.isOnTopic && analysis.confidence > 0.7) {
+      return "Try to connect this back to " + this.currentTopic;
+    }
+    
+    const quality = this.assessTeachingQuality(phrase);
+    
+    // Check recent history for patterns
+    const recentPhrases = this.phraseHistory.slice(-10);
+    const recentExamples = recentPhrases.filter(p => p.analysis?.teachingQuality?.hasExample).length;
+    const recentQuestions = recentPhrases.filter(p => p.analysis?.teachingQuality?.hasQuestion).length;
+    
+    if (recentExamples < 2 && !quality.hasExample) {
+      return "Consider adding an example to illustrate the concept";
+    }
+    
+    if (recentQuestions < 1 && !quality.hasQuestion) {
+      return "Engage students with a question";
+    }
+    
+    return null; // No suggestion needed
+  }
+
+  // ENHANCED: Update teaching metrics from AI analysis
+  updateTeachingMetricsFromAI(indicators) {
+    if (indicators.usesExamples) {
+      this.teachingMetrics.exampleUsage = Math.min(100, this.teachingMetrics.exampleUsage + 3);
+    }
+    if (indicators.asksQuestions) {
+      this.teachingMetrics.questionAsking = Math.min(100, this.teachingMetrics.questionAsking + 3);
+      this.teachingMetrics.engagement = Math.min(100, this.teachingMetrics.engagement + 2);
+    }
+    if (indicators.explainsWell) {
+      this.teachingMetrics.clarity = Math.min(100, this.teachingMetrics.clarity + 2);
+    }
+    if (indicators.engagingDelivery) {
+      this.teachingMetrics.engagement = Math.min(100, this.teachingMetrics.engagement + 3);
+    }
+  }
+
+  // ENHANCED: Update teaching effectiveness in real-time
+  updateTeachingEffectiveness(analysis) {
+    // Add to recent scores
+    this.teachingEffectiveness.recentScores.push(analysis.phraseScore || 50);
+    
+    // Keep only last 20 scores
+    if (this.teachingEffectiveness.recentScores.length > 20) {
+      this.teachingEffectiveness.recentScores.shift();
+    }
+    
+    // Calculate overall score
+    const scores = this.teachingEffectiveness.recentScores;
+    this.teachingEffectiveness.overallScore = Math.round(
+      scores.reduce((a, b) => a + b, 0) / scores.length
+    );
+    
+    // Determine trend
+    if (scores.length >= 5) {
+      const recent5 = scores.slice(-5);
+      const previous5 = scores.slice(-10, -5);
+      
+      if (previous5.length >= 3) {
+        const recentAvg = recent5.reduce((a, b) => a + b, 0) / recent5.length;
+        const previousAvg = previous5.reduce((a, b) => a + b, 0) / previous5.length;
+        
+        if (recentAvg > previousAvg + 5) {
+          this.teachingEffectiveness.trend = 'improving';
+        } else if (recentAvg < previousAvg - 5) {
+          this.teachingEffectiveness.trend = 'declining';
+        } else {
+          this.teachingEffectiveness.trend = 'stable';
+        }
+      }
+    }
+    
+    // Generate dynamic suggestions
+    this.teachingEffectiveness.suggestions = this.generateTeachingSuggestions();
+    this.teachingEffectiveness.strengths = this.identifyStrengths();
+    this.teachingEffectiveness.improvements = this.identifyImprovements();
+  }
+
+  // ENHANCED: Generate real-time teaching suggestions
+  generateTeachingSuggestions() {
+    const suggestions = [];
+    
+    if (this.teachingMetrics.exampleUsage < 60) {
+      suggestions.push("Add more real-world examples to illustrate concepts");
+    }
+    if (this.teachingMetrics.questionAsking < 50) {
+      suggestions.push("Ask more questions to engage students");
+    }
+    if (this.teachingMetrics.clarity < 60) {
+      suggestions.push("Use simpler language and explain terms");
+    }
+    if (this.offTopicTime > this.onTopicTime * 0.3) {
+      suggestions.push("Try to stay more focused on the topic");
+    }
+    
+    return suggestions.slice(0, 3);
+  }
+
+  // ENHANCED: Identify teaching strengths
+  identifyStrengths() {
+    const strengths = [];
+    
+    if (this.teachingMetrics.exampleUsage > 70) {
+      strengths.push("Excellent use of examples");
+    }
+    if (this.teachingMetrics.questionAsking > 70) {
+      strengths.push("Good student engagement through questions");
+    }
+    if (this.teachingMetrics.clarity > 70) {
+      strengths.push("Clear explanations");
+    }
+    if (this.onTopicTime > this.offTopicTime * 4) {
+      strengths.push("Strong topic focus");
+    }
+    
+    return strengths;
+  }
+
+  // ENHANCED: Identify areas for improvement
+  identifyImprovements() {
+    const improvements = [];
+    
+    if (this.teachingMetrics.exampleUsage < 50) {
+      improvements.push("Example usage");
+    }
+    if (this.teachingMetrics.questionAsking < 50) {
+      improvements.push("Student interaction");
+    }
+    if (this.teachingMetrics.engagement < 50) {
+      improvements.push("Engagement level");
+    }
+    
+    return improvements;
+  }
+
+  // ENHANCED: Calculate cumulative teaching score
+  calculateCumulativeScore() {
+    const metrics = this.teachingMetrics;
+    const weights = {
+      clarity: 0.2,
+      engagement: 0.2,
+      pacing: 0.1,
+      exampleUsage: 0.15,
+      questionAsking: 0.15,
+      contentAccuracy: 0.2
+    };
+    
+    let totalScore = 0;
+    let totalWeight = 0;
+    
+    for (const [key, weight] of Object.entries(weights)) {
+      if (metrics[key] !== undefined) {
+        totalScore += metrics[key] * weight;
+        totalWeight += weight;
+      }
+    }
+    
+    // Factor in on-topic percentage
+    const totalTime = this.onTopicTime + this.offTopicTime;
+    if (totalTime > 0) {
+      const onTopicPercent = (this.onTopicTime / totalTime) * 100;
+      totalScore = totalScore * 0.7 + onTopicPercent * 0.3;
+    }
+    
+    return Math.round(totalScore);
+  }
+
+  // ENHANCED: Get phrase history for display
+  getPhraseHistory() {
+    return this.phraseHistory.slice(-20).map(p => ({
+      text: p.text,
+      timestamp: p.timestamp,
+      isOnTopic: p.analysis?.isOnTopic,
+      score: p.analysis?.phraseScore,
+      reason: p.analysis?.reason
+    }));
+  }
+
+  // ENHANCED: Get real-time teaching effectiveness data
+  getTeachingEffectiveness() {
+    return {
+      ...this.teachingEffectiveness,
+      metrics: this.teachingMetrics,
+      cumulativeScore: this.calculateCumulativeScore(),
+      phraseCount: this.phraseHistory.length,
+      recentTrend: this.continuousScores.slice(-10)
+    };
+  }
   // Run Gemini AI analysis for better accuracy
   async runAIAnalysis() {
     if (!this.analysisBuffer.trim()) return;
@@ -929,7 +1377,13 @@ Respond with JSON only (no markdown):
       recentKeywords: this.sessionData.slice(-5).flatMap(s => s.matchedKeywords).filter((v, i, a) => a.indexOf(v) === i),
       // LIVE strengths and improvements
       strengths: this.identifyStrengthsLive(finalOnTopicPercent),
-      improvements: this.identifyImprovementsLive(finalOnTopicPercent)
+      improvements: this.identifyImprovementsLive(finalOnTopicPercent),
+      // ENHANCED: Real-time teaching effectiveness data
+      cumulativeScore: this.calculateCumulativeScore(),
+      trend: this.teachingEffectiveness?.trend || 'stable',
+      recentTrend: this.continuousScores?.slice(-15) || [],
+      phraseCount: this.phraseHistory?.length || 0,
+      teachingEffectiveness: this.teachingEffectiveness
     };
   }
   

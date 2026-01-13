@@ -1,9 +1,9 @@
-// LiveFaceCamera.jsx - Real-time face detection with name overlay
+// LiveFaceCamera.jsx - ENHANCED Real-time face detection with name overlay
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { 
   Camera, Users, UserCheck, UserX, AlertCircle, 
   Loader, Video, VideoOff, RefreshCw, Upload,
-  CheckCircle, XCircle, Clock
+  CheckCircle, XCircle, Clock, Scan, Eye
 } from 'lucide-react';
 import { faceRecognitionService } from '../services/FaceRecognitionService';
 import { faceDatabase } from '../services/FaceDatabase';
@@ -20,6 +20,10 @@ const LiveFaceCamera = ({ onAttendanceUpdate }) => {
   const [stats, setStats] = useState({ total: 0, present: 0, absent: 0, percentage: 0 });
   const [isDetecting, setIsDetecting] = useState(false);
   const detectionInterval = useRef(null);
+  
+  // ENHANCED: Detection status
+  const [detectionStatus, setDetectionStatus] = useState(null);
+  const [recognitionMode, setRecognitionMode] = useState('loading'); // 'loading', 'real', 'simulation'
 
   // Initialize face recognition
   useEffect(() => {
@@ -47,6 +51,7 @@ const LiveFaceCamera = ({ onAttendanceUpdate }) => {
   const initializeFaceRecognition = async () => {
     setIsModelLoading(true);
     setModelError(null);
+    setRecognitionMode('loading');
     
     try {
       // Initialize database first
@@ -58,6 +63,13 @@ const LiveFaceCamera = ({ onAttendanceUpdate }) => {
       if (success) {
         setIsModelLoading(false);
         updateAttendanceDisplay();
+        
+        // ENHANCED: Check detection status
+        const status = faceRecognitionService.getDetectionStatus();
+        setDetectionStatus(status);
+        setRecognitionMode(status.useSimulation ? 'simulation' : 'real');
+        
+        console.log('Face recognition status:', status);
       } else {
         throw new Error('Failed to load face recognition models');
       }
@@ -65,6 +77,7 @@ const LiveFaceCamera = ({ onAttendanceUpdate }) => {
       console.error('Initialization error:', error);
       setModelError(error.message);
       setIsModelLoading(false);
+      setRecognitionMode('simulation');
     }
   };
 
@@ -158,7 +171,7 @@ const LiveFaceCamera = ({ onAttendanceUpdate }) => {
 
   return (
     <div className="bg-gray-900 rounded-2xl overflow-hidden">
-      {/* Header */}
+      {/* Header - ENHANCED with detection mode indicator */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -166,6 +179,32 @@ const LiveFaceCamera = ({ onAttendanceUpdate }) => {
             <h2 className="text-xl font-bold text-white">Live Face Recognition</h2>
           </div>
           <div className="flex items-center gap-3">
+            {/* ENHANCED: Detection mode indicator */}
+            <span className={`flex items-center gap-2 text-sm px-3 py-1 rounded-full ${
+              recognitionMode === 'real' 
+                ? 'bg-green-500/30 text-green-300' 
+                : recognitionMode === 'simulation'
+                ? 'bg-yellow-500/30 text-yellow-300'
+                : 'bg-gray-500/30 text-gray-300'
+            }`}>
+              {recognitionMode === 'real' ? (
+                <>
+                  <Eye className="w-4 h-4" />
+                  Live AI Detection
+                </>
+              ) : recognitionMode === 'simulation' ? (
+                <>
+                  <Scan className="w-4 h-4" />
+                  Demo Mode
+                </>
+              ) : (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Loading...
+                </>
+              )}
+            </span>
+            
             {isDetecting && (
               <span className="flex items-center gap-2 text-green-300 text-sm">
                 <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
@@ -194,6 +233,15 @@ const LiveFaceCamera = ({ onAttendanceUpdate }) => {
             </button>
           </div>
         </div>
+        
+        {/* ENHANCED: Detection status info */}
+        {detectionStatus && (
+          <div className="mt-3 flex items-center gap-4 text-sm text-white/70">
+            <span>📊 {detectionStatus.registeredStudents} students registered</span>
+            <span>🔍 {detectionStatus.faceDescriptorsLoaded} faces loaded</span>
+            {!detectionStatus.useSimulation && <span className="text-green-300">✓ Real-time detection active</span>}
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
