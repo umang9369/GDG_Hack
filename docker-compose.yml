@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    container_name: gdg-backend
+    ports:
+      - "5001:5000"
+
+  frontend:
+    build: ./frontend
+    container_name: gdg-frontend
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
