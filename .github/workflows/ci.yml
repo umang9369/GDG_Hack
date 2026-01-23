@@ -21,11 +21,10 @@ jobs:
           npm install
           npm test
 
+      # --- REPLACE THE OLD ACTION WITH YOUR NEW COMMAND HERE ---
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+      # ---------------------------------------------------------
 
       - name: Build & Push Images
         run: |
